@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Dict, List
 
 import pandas as pd
@@ -14,6 +15,13 @@ def _humanize_group(name: str) -> str:
         label = label[2:]
     label = label.replace("_", " ").strip()
     return label.title()
+
+def _safe_filename(name: str) -> str:
+    name = name.strip()
+    name = name.replace("/", "_")
+    name = re.sub(r"[^A-Za-z0-9_\\- ]+", "", name)
+    name = re.sub(r"\\s+", "_", name)
+    return name[:80] if name else "grupo"
 
 
 def build_reports(
@@ -57,7 +65,8 @@ def build_reports(
             combined_rows.append(row)
 
         report_df = pd.DataFrame(data)
-        csv_path = RESULTS_DIR / f"{output_prefix}{group_name}.csv"
+        safe_name = _safe_filename(group_name)
+        csv_path = RESULTS_DIR / f"{output_prefix}{safe_name}.csv"
         report_df.to_csv(csv_path, index=False)
 
         reports.append(
@@ -78,7 +87,7 @@ def build_reports(
     with pd.ExcelWriter(combined_xlsx, engine="openpyxl") as writer:
         combined_df.to_excel(writer, index=False, sheet_name="Consolidado")
         for rep in reports:
-            sheet_name = rep["group_label"][:31]
+            sheet_name = _safe_filename(rep["group_label"])[:31]
             pd.DataFrame(rep["rows"]).to_excel(writer, index=False, sheet_name=sheet_name)
 
     combined_html = RESULTS_DIR / f"{output_prefix}consolidado.html"
