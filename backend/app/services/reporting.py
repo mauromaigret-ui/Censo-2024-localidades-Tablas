@@ -19,7 +19,7 @@ def _humanize_group(name: str) -> str:
 def _safe_filename(name: str) -> str:
     name = name.strip()
     name = name.replace("/", "_")
-    name = re.sub(r"[^A-Za-z0-9_\\- ]+", "", name)
+    name = re.sub(r"[^A-Za-z0-9_ -]+", "", name)
     name = re.sub(r"\\s+", "_", name)
     return name[:80] if name else "grupo"
 
