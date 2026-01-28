@@ -87,6 +87,7 @@ def report(req: ReportRequest) -> ReportResponse:
             reports=reports,
             combined_csv=result["combined_csv"],
             combined_html=result["combined_html"],
+            combined_docx=result["combined_docx"],
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

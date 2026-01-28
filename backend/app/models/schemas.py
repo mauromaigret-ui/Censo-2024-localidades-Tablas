@@ -64,3 +64,4 @@ class ReportResponse(BaseModel):
     reports: List[ReportResult]
     combined_csv: str
     combined_html: str
+    combined_docx: str
