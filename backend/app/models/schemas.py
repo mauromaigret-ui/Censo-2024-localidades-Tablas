@@ -40,7 +40,6 @@ class ReportRequest(BaseModel):
     layer: str
     filter_id: str
     groups: List[str]
-    dictionary_id: Optional[str] = None
 
 
 class ReportRow(BaseModel):

@@ -18,8 +18,7 @@ Luego abre `http://localhost:8000`.
 ## Datos esperados
 - GPKG: `Cartografia_Censal/Cartografia_censo2024_Pais.gpkg`
 - Diccionario cartográfico (XLSX): `Cartografia_Censal/Diccionario_variables_geograficas_CPV24.xlsx`
-- Diccionario de variables (CSV): carga en la UI con columnas
-  `Tema, Subtema, Variable_Codigo, Descripcion_Etiqueta, Valores_Codigos_y_Detalle`
+- Diccionario de variables (CSV): `data/diccionario_variables.csv`
 - Filtro: Excel con `ID_ENTIDAD` (y opcionalmente `ENTIDAD`, `LOCALIDAD`, `COMUNA`).
 
 ## Salidas

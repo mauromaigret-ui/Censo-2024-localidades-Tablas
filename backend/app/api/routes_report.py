@@ -10,6 +10,7 @@ from app.services.grouping import group_columns
 from app.services.mapping_reader import load_mapping_csv
 from app.services.reporting import build_reports
 from app.store import store
+from app.config import VARIABLES_DICT_PATH
 
 router = APIRouter()
 
@@ -41,9 +42,8 @@ def report(req: ReportRequest) -> ReportResponse:
         details = {}
         group_labels = {}
 
-        if req.dictionary_id:
-            dict_file = store.get(req.dictionary_id)
-            mapping_df = load_mapping_csv(str(dict_file.path))
+        if VARIABLES_DICT_PATH.exists():
+            mapping_df = load_mapping_csv(str(VARIABLES_DICT_PATH))
             mapping_df = mapping_df[mapping_df["Variable_Codigo"].isin(all_fields)]
             groups_map = {
                 f"{tema} / {subtema}": gdf["Variable_Codigo"].tolist()

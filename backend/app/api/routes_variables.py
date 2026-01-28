@@ -7,7 +7,7 @@ from app.services.dictionary_reader import dictionary_map
 from app.services.gpkg_reader import get_table_columns
 from app.services.grouping import group_columns
 from app.services.mapping_reader import load_mapping_csv
-from app.store import store
+from app.config import VARIABLES_DICT_PATH
 
 router = APIRouter()
 
@@ -23,7 +23,7 @@ NUMERIC_TYPES = {
 
 
 @router.get("/variables", response_model=VariablesResponse)
-def variables(layer: str = Query(...), dictionary_id: str | None = Query(None)) -> VariablesResponse:
+def variables(layer: str = Query(...)) -> VariablesResponse:
     try:
         cols = get_table_columns(layer)
         dict_map = dictionary_map(layer)
@@ -37,9 +37,8 @@ def variables(layer: str = Query(...), dictionary_id: str | None = Query(None)) 
                 fields.append(name)
 
         group_list = []
-        if dictionary_id:
-            stored = store.get(dictionary_id)
-            mapping_df = load_mapping_csv(str(stored.path))
+        if VARIABLES_DICT_PATH.exists():
+            mapping_df = load_mapping_csv(str(VARIABLES_DICT_PATH))
             mapping_df = mapping_df[mapping_df["Variable_Codigo"].isin(fields)]
             for (tema, subtema), gdf in mapping_df.groupby(["Tema", "Subtema"]):
                 group_name = f"{tema} / {subtema}"

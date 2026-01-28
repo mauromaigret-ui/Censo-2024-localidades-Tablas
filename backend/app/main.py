@@ -9,7 +9,6 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.routes_layers import router as layers_router
 from app.api.routes_upload import router as upload_router
-from app.api.routes_dictionary import router as dictionary_router
 from app.api.routes_variables import router as variables_router
 from app.api.routes_report import router as report_router
 
@@ -25,7 +24,6 @@ app.add_middleware(
 
 app.include_router(layers_router)
 app.include_router(upload_router)
-app.include_router(dictionary_router)
 app.include_router(variables_router)
 app.include_router(report_router)
 
