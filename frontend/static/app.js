@@ -170,6 +170,7 @@ function renderResults(data) {
     <div class="group-title">Salida consolidada</div>
     <div class="group-meta">CSV: <code>${data.combined_csv}</code></div>
     <div class="group-meta">HTML: <code>${data.combined_html}</code></div>
+    <div class="group-meta">XLSX: <code>${data.combined_xlsx}</code></div>
     <div class="group-meta">DOCX: <code>${data.combined_docx}</code></div>
     <div class="group-meta">Sugerencia: abrir el HTML y copiar a Word.</div>
   `;

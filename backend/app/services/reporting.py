@@ -73,24 +73,32 @@ def build_reports(
     combined_html = RESULTS_DIR / f"{output_prefix}consolidado.html"
     combined_df.to_html(combined_html, index=False)
 
+    combined_xlsx = RESULTS_DIR / f"{output_prefix}consolidado.xlsx"
+    combined_df.to_excel(combined_xlsx, index=False)
+
     combined_docx = RESULTS_DIR / f"{output_prefix}consolidado.docx"
-    doc = Document()
-    doc.add_heading("Reporte consolidado", level=1)
-    table = doc.add_table(rows=1, cols=len(combined_df.columns))
-    table.style = "Table Grid"
-    hdr_cells = table.rows[0].cells
-    for idx, col in enumerate(combined_df.columns):
-        hdr_cells[idx].text = str(col)
-    for _, row in combined_df.iterrows():
-        row_cells = table.add_row().cells
+    try:
+        doc = Document()
+        doc.add_heading("Reporte consolidado", level=1)
+        table = doc.add_table(rows=1, cols=len(combined_df.columns))
+        table.style = "Table Grid"
+        hdr_cells = table.rows[0].cells
         for idx, col in enumerate(combined_df.columns):
-            value = row[col]
-            row_cells[idx].text = "" if pd.isna(value) else str(value)
-    doc.save(combined_docx)
+            hdr_cells[idx].text = str(col)
+        for _, row in combined_df.iterrows():
+            row_cells = table.add_row().cells
+            for idx, col in enumerate(combined_df.columns):
+                value = row[col]
+                row_cells[idx].text = "" if pd.isna(value) else str(value)
+        doc.save(combined_docx)
+    except Exception:
+        combined_docx = RESULTS_DIR / f"{output_prefix}consolidado_docx_error.txt"
+        combined_docx.write_text("Error generando DOCX. Use el HTML o CSV.")
 
     return {
         "reports": reports,
         "combined_csv": str(combined_csv),
         "combined_html": str(combined_html),
         "combined_docx": str(combined_docx),
+        "combined_xlsx": str(combined_xlsx),
     }

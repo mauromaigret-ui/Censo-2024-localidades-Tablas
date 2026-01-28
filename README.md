@@ -22,4 +22,4 @@ Luego abre `http://localhost:8000`.
 
 ## Salidas
 - CSV por variable en `Resultados/reporte_[grupo].csv`
-- Consolidado: `Resultados/reporte_consolidado.csv`, `Resultados/reporte_consolidado.html`, `Resultados/reporte_consolidado.docx`
+- Consolidado: `Resultados/reporte_consolidado.csv`, `Resultados/reporte_consolidado.html`, `Resultados/reporte_consolidado.xlsx`, `Resultados/reporte_consolidado.docx`

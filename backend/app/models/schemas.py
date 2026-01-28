@@ -65,3 +65,4 @@ class ReportResponse(BaseModel):
     combined_csv: str
     combined_html: str
     combined_docx: str
+    combined_xlsx: str
