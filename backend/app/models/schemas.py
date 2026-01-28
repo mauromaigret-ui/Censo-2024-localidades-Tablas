@@ -21,6 +21,8 @@ class UploadFilterResponse(BaseModel):
 class VariableField(BaseModel):
     name: str
     description: str
+    label: str | None = None
+    detail: str | None = None
     dtype: str
 
 
@@ -38,6 +40,7 @@ class ReportRequest(BaseModel):
     layer: str
     filter_id: str
     groups: List[str]
+    dictionary_id: Optional[str] = None
 
 
 class ReportRow(BaseModel):
@@ -45,6 +48,8 @@ class ReportRow(BaseModel):
     group_label: str
     field: str
     description: str
+    label: str
+    detail: str | None = None
     value: float
     pct: Optional[float]
     total: float

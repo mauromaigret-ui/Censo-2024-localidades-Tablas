@@ -10,14 +10,16 @@ App local con interfaz en navegador para generar tabulados por entidad censal a 
 python3 -m venv backend/.venv
 source backend/.venv/bin/activate
 pip install -r backend/requirements.txt
-uvicorn app.main:app --reload --port 8000
+uvicorn --app-dir backend app.main:app --reload --port 8000
 ```
 
 Luego abre `http://localhost:8000`.
 
 ## Datos esperados
 - GPKG: `Cartografia_Censal/Cartografia_censo2024_Pais.gpkg`
-- Diccionario: `Cartografia_Censal/Diccionario_variables_geograficas_CPV24.xlsx`
+- Diccionario cartográfico (XLSX): `Cartografia_Censal/Diccionario_variables_geograficas_CPV24.xlsx`
+- Diccionario de variables (CSV): carga en la UI con columnas
+  `Tema, Subtema, Variable_Codigo, Descripcion_Etiqueta, Valores_Codigos_y_Detalle`
 - Filtro: Excel con `ID_ENTIDAD` (y opcionalmente `ENTIDAD`, `LOCALIDAD`, `COMUNA`).
 
 ## Salidas

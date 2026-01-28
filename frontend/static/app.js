@@ -1,6 +1,8 @@
 const statusEl = document.getElementById("status");
 const layerSelect = document.getElementById("layerSelect");
 const loadVarsBtn = document.getElementById("loadVarsBtn");
+const dictInput = document.getElementById("dictInput");
+const dictMeta = document.getElementById("dictMeta");
 const filterInput = document.getElementById("filterInput");
 const filterMeta = document.getElementById("filterMeta");
 const groupsList = document.getElementById("groupsList");
@@ -12,6 +14,7 @@ const results = document.getElementById("results");
 
 const state = {
   filterId: null,
+  dictionaryId: null,
   groups: [],
 };
 
@@ -37,7 +40,11 @@ async function loadVariables() {
   const layer = layerSelect.value;
   if (!layer) return;
   setStatus("Cargando variables...");
-  const res = await fetch(`/variables?layer=${encodeURIComponent(layer)}`);
+  const params = new URLSearchParams({ layer });
+  if (state.dictionaryId) {
+    params.set("dictionary_id", state.dictionaryId);
+  }
+  const res = await fetch(`/variables?${params.toString()}`);
   if (!res.ok) {
     setStatus("Error al cargar variables");
     return;
@@ -85,6 +92,31 @@ function renderGroups() {
 
   groupsList.appendChild(wrapper);
 }
+
+dictInput.addEventListener("change", async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+  setStatus("Subiendo diccionario...");
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch("/upload-dictionary", {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!res.ok) {
+    setStatus("Error al cargar diccionario");
+    dictMeta.textContent = "No se pudo leer el diccionario.";
+    return;
+  }
+
+  const data = await res.json();
+  state.dictionaryId = data.filter_id;
+  dictMeta.textContent = `Diccionario cargado: ${data.rows} filas`;
+  setStatus("Diccionario listo");
+});
 
 filterInput.addEventListener("change", async (event) => {
   const file = event.target.files[0];
@@ -144,6 +176,7 @@ runBtn.addEventListener("click", async () => {
       layer,
       filter_id: state.filterId,
       groups: selected,
+      dictionary_id: state.dictionaryId,
     }),
   });
 
@@ -172,7 +205,7 @@ function renderResults(data) {
     <div class="group-meta">HTML: <code>${data.combined_html}</code></div>
     <div class="group-meta">XLSX: <code>${data.combined_xlsx}</code></div>
     <div class="group-meta">DOCX: <code>${data.combined_docx}</code></div>
-    <div class="group-meta">Sugerencia: abrir el HTML y copiar a Word.</div>
+    <div class="group-meta">Sugerencia: abrir el DOCX o HTML y copiar a Word.</div>
   `;
   wrapper.appendChild(combined);
 

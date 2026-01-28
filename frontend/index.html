@@ -47,7 +47,17 @@
 
         <section class="panel">
           <div class="panel-header">
-            <h2>2) Cargar filtro de entidades</h2>
+            <h2>2) Cargar diccionario de variables (CSV)</h2>
+          </div>
+          <div class="panel-body">
+            <input type="file" id="dictInput" accept=".csv" />
+            <div class="file-meta" id="dictMeta">Sin diccionario cargado.</div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <h2>3) Cargar filtro de entidades</h2>
           </div>
           <div class="panel-body">
             <input type="file" id="filterInput" accept=".xlsx" />
@@ -57,7 +67,7 @@
 
         <section class="panel">
           <div class="panel-header">
-            <h2>3) Selección de variables (por grupos)</h2>
+            <h2>4) Selección de variables (por grupos)</h2>
             <div class="panel-actions">
               <input type="text" id="searchBox" placeholder="Buscar grupo..." />
               <button class="btn" id="selectAllBtn">Seleccionar todo</button>
@@ -71,7 +81,7 @@
 
         <section class="panel">
           <div class="panel-header">
-            <h2>4) Generar reportes</h2>
+            <h2>5) Generar reportes</h2>
             <button class="btn primary" id="runBtn">Generar</button>
           </div>
           <div class="panel-body" id="results">
