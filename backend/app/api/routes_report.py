@@ -3,9 +3,9 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 
 from app.models.schemas import ReportRequest, ReportResponse, ReportResult, ReportRow
-from app.services.dictionary_reader import load_dictionary
+from app.services.dictionary_reader import dictionary_map
 from app.services.filter_reader import read_filter_excel
-from app.services.gpkg_reader import load_layer, load_layer_by_names
+from app.services.gpkg_reader import get_table_columns, load_layer, load_layer_by_names
 from app.services.grouping import group_columns
 from app.services.reporting import build_reports
 from app.store import store
@@ -28,12 +28,13 @@ def report(req: ReportRequest) -> ReportResponse:
         stored = store.get(req.filter_id)
         filter_info = read_filter_excel(str(stored.path))
 
-        df_dict = load_dictionary(req.layer)
-        df_dict["dtype_norm"] = df_dict["dtype"].astype(str).str.lower().str.strip()
-        df_dict["field"] = df_dict["field"].astype(str)
-        stats_df = df_dict[(df_dict["dtype_norm"].isin(NUMERIC_TYPES)) & (df_dict["field"].str.startswith("n_"))]
-
-        all_fields = stats_df["field"].tolist()
+        cols = get_table_columns(req.layer)
+        all_fields = [
+            name
+            for name, dtype in cols
+            if str(name).startswith("n_")
+            and str(dtype).lower().strip() in NUMERIC_TYPES
+        ]
         groups_map = group_columns(all_fields)
 
         selected_groups = {g: groups_map[g] for g in req.groups if g in groups_map}
@@ -52,7 +53,8 @@ def report(req: ReportRequest) -> ReportResponse:
         else:
             df = load_layer_by_names(req.layer, list(needed_columns), filter_info["names"])
 
-        descriptions = {row.field: row.description for row in stats_df.itertuples(index=False)}
+        dict_map = dictionary_map(req.layer)
+        descriptions = {k: v.get("description", "") for k, v in dict_map.items()}
 
         reports_raw = build_reports(
             df,
