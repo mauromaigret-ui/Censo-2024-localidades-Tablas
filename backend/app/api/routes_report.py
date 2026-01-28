@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 
-from app.models.schemas import ReportRequest, ReportResponse, ReportResult, ReportRow
+from app.models.schemas import ReportRequest, ReportResponse, ReportResult
 from app.services.dictionary_reader import dictionary_map
 from app.services.filter_reader import read_filter_excel
 from app.services.gpkg_reader import get_table_columns, load_layer, load_layer_by_names
@@ -88,13 +88,12 @@ def report(req: ReportRequest) -> ReportResponse:
 
         reports = []
         for r in result["reports"]:
-            rows = [ReportRow(**row) for row in r["rows"]]
             reports.append(
                 ReportResult(
                     group=r["group"],
                     group_label=r["group_label"],
                     total=r["total"],
-                    rows=rows,
+                    rows_count=len(r["rows"]),
                     csv_path=r["csv_path"],
                 )
             )
