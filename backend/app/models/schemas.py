@@ -1,0 +1,61 @@
+from __future__ import annotations
+
+from pydantic import BaseModel
+from typing import Any, Dict, List, Optional
+
+
+class LayerInfo(BaseModel):
+    name: str
+
+
+class LayersResponse(BaseModel):
+    layers: List[LayerInfo]
+
+
+class UploadFilterResponse(BaseModel):
+    filter_id: str
+    rows: int
+    columns: List[str]
+
+
+class VariableField(BaseModel):
+    name: str
+    description: str
+    dtype: str
+
+
+class VariableGroup(BaseModel):
+    group: str
+    fields: List[VariableField]
+
+
+class VariablesResponse(BaseModel):
+    layer: str
+    groups: List[VariableGroup]
+
+
+class ReportRequest(BaseModel):
+    layer: str
+    filter_id: str
+    groups: List[str]
+
+
+class ReportRow(BaseModel):
+    group: str
+    field: str
+    description: str
+    value: float
+    pct: Optional[float]
+
+
+class ReportResult(BaseModel):
+    group: str
+    total: float
+    rows: List[ReportRow]
+    csv_path: str
+
+
+class ReportResponse(BaseModel):
+    layer: str
+    entities_count: int
+    reports: List[ReportResult]

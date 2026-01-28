@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Censo 2024 · Localidades Tablas</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-badge">C24</div>
+          <div>
+            <div class="brand-title">Localidades Tablas</div>
+            <div class="brand-sub">Cartografía censal</div>
+          </div>
+        </div>
+        <div class="hint">
+          Capas recomendadas:
+          <ul>
+            <li>Limite_Urbano_CPV24</li>
+            <li>Aldeas_CPV24</li>
+            <li>Entidades_CPV24</li>
+          </ul>
+        </div>
+      </aside>
+
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <div class="title">Tabulados por Entidad Censal</div>
+            <div class="subtitle">Filtra por ID_ENTIDAD y genera reportes por variable.</div>
+          </div>
+          <div class="status" id="status">Listo</div>
+        </header>
+
+        <section class="panel">
+          <div class="panel-header">
+            <h2>1) Selecciona capa cartográfica</h2>
+          </div>
+          <div class="panel-body">
+            <select id="layerSelect"></select>
+            <button class="btn" id="loadVarsBtn">Cargar variables</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <h2>2) Cargar filtro de entidades</h2>
+          </div>
+          <div class="panel-body">
+            <input type="file" id="filterInput" accept=".xlsx" />
+            <div class="file-meta" id="filterMeta">Sin filtro cargado.</div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <h2>3) Selección de variables (por grupos)</h2>
+            <div class="panel-actions">
+              <input type="text" id="searchBox" placeholder="Buscar grupo..." />
+              <button class="btn" id="selectAllBtn">Seleccionar todo</button>
+              <button class="btn secondary" id="clearAllBtn">Limpiar</button>
+            </div>
+          </div>
+          <div class="panel-body" id="groupsList">
+            <div class="empty">Cargar variables primero.</div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <h2>4) Generar reportes</h2>
+            <button class="btn primary" id="runBtn">Generar</button>
+          </div>
+          <div class="panel-body" id="results">
+            <div class="empty">Sin reportes aún.</div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>

@@ -1,0 +1,9 @@
+.DS_Store
+__pycache__/
+*.pyc
+backend/.venv/
+backend/app/store/data/
+Resultados/
+Cartografia_Censal/
+Bases de Datos - Microdatos/
+Dicionario/
