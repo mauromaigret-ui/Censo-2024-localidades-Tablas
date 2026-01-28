@@ -164,11 +164,21 @@ function renderResults(data) {
   const wrapper = document.createElement("div");
   wrapper.className = "results";
 
+  const combined = document.createElement("div");
+  combined.className = "result-card";
+  combined.innerHTML = `
+    <div class="group-title">Salida consolidada</div>
+    <div class="group-meta">CSV: <code>${data.combined_csv}</code></div>
+    <div class="group-meta">HTML: <code>${data.combined_html}</code></div>
+    <div class="group-meta">Sugerencia: abrir el HTML y copiar a Word.</div>
+  `;
+  wrapper.appendChild(combined);
+
   data.reports.forEach((report) => {
     const card = document.createElement("div");
     card.className = "result-card";
     card.innerHTML = `
-      <div class="group-title">${report.group}</div>
+      <div class="group-title">${report.group_label || report.group}</div>
       <div class="group-meta">Total: ${report.total} · Filas: ${report.rows.length}</div>
       <div class="group-meta">CSV: <code>${report.csv_path}</code></div>
     `;

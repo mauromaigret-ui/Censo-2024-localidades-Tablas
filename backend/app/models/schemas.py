@@ -42,14 +42,17 @@ class ReportRequest(BaseModel):
 
 class ReportRow(BaseModel):
     group: str
+    group_label: str
     field: str
     description: str
     value: float
     pct: Optional[float]
+    total: float
 
 
 class ReportResult(BaseModel):
     group: str
+    group_label: str
     total: float
     rows: List[ReportRow]
     csv_path: str
@@ -59,3 +62,5 @@ class ReportResponse(BaseModel):
     layer: str
     entities_count: int
     reports: List[ReportResult]
+    combined_csv: str
+    combined_html: str

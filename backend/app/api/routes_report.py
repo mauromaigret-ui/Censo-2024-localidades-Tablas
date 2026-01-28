@@ -56,7 +56,7 @@ def report(req: ReportRequest) -> ReportResponse:
         dict_map = dictionary_map(req.layer)
         descriptions = {k: v.get("description", "") for k, v in dict_map.items()}
 
-        reports_raw = build_reports(
+        result = build_reports(
             df,
             selected_groups,
             descriptions,
@@ -64,18 +64,19 @@ def report(req: ReportRequest) -> ReportResponse:
         )
 
         reports = []
-        for r in reports_raw:
+        for r in result["reports"]:
             rows = [ReportRow(**row) for row in r["rows"]]
             reports.append(
                 ReportResult(
                     group=r["group"],
+                    group_label=r["group_label"],
                     total=r["total"],
                     rows=rows,
                     csv_path=r["csv_path"],
                 )
             )
 
-        for rep in reports_raw:
+        for rep in result["reports"]:
             print("\n===", rep["group"], "===")
             for row in rep["rows"]:
                 print(f"{row['field']}: {row['value']} ({row['pct']}%)")
@@ -84,6 +85,8 @@ def report(req: ReportRequest) -> ReportResponse:
             layer=req.layer,
             entities_count=int(len(df.index)),
             reports=reports,
+            combined_csv=result["combined_csv"],
+            combined_html=result["combined_html"],
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
