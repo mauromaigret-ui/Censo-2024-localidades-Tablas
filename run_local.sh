@@ -18,4 +18,4 @@ source "$BACKEND_DIR/.venv/bin/activate"
 
 pip install -r "$BACKEND_DIR/requirements.txt"
 
-uvicorn app.main:app --reload --port 8000
+uvicorn --app-dir "$BACKEND_DIR" app.main:app --reload --port 8000
