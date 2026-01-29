@@ -19,7 +19,10 @@ def _format_n(value: float) -> int | float:
 
 
 def _format_pct(value: float) -> str:
-    text = f"{round(value, 1):.1f}".replace(".", ",")
+    rounded = round(value, 1)
+    if abs(rounded - int(rounded)) < 1e-9:
+        return f"{int(rounded)}%"
+    text = f"{rounded:.1f}".replace(".", ",")
     return f"{text}%"
 
 
@@ -63,6 +66,23 @@ def _clean_label(label: str) -> str:
     return text.strip()
 
 
+def _lower_after_commas(text: str) -> str:
+    def repl(match: re.Match[str]) -> str:
+        return f", {match.group(1).lower()}"
+
+    return re.sub(r",\s*([A-ZÁÉÍÓÚÑ])", repl, text)
+
+
+def _join_with_y(items: List[str]) -> str:
+    if not items:
+        return ""
+    if len(items) == 1:
+        return items[0]
+    if len(items) == 2:
+        return f"{items[0]} y {items[1]}"
+    return f"{', '.join(items[:-1])} y {items[-1]}"
+
+
 def _build_narrative(rows: List[Dict[str, object]], title: str, denominator_code: str | None = None) -> str:
     source_terms = [
         "De acuerdo al Censo 2024,",
@@ -74,11 +94,6 @@ def _build_narrative(rows: List[Dict[str, object]], title: str, denominator_code
         "La mayoría se concentra en",
         "La categoría predominante es",
         "La proporción más alta se observa en",
-    ]
-    dominance_terms = [
-        "Es la categoría predominante.",
-        "Abarca más de la mitad de la muestra.",
-        "Concentra más del 50% de los casos.",
     ]
     closing_terms = [
         "A continuación, se presentan los resultados señalados en la siguiente tabla.",
@@ -104,15 +119,18 @@ def _build_narrative(rows: List[Dict[str, object]], title: str, denominator_code
         n_val = _row_value(row)
         pct_val = _parse_pct(row.get("Porcentaje"))
         if n_val == 0:
-            text = f"{random.choice(source_terms)} Respecto de {topic}, no se registran casos en {label} (0 casos)."
+            text = f"{random.choice(source_terms)} respecto de {topic}, no se registran casos en {label} (0 casos)"
         else:
             pct_text = _format_pct(pct_val) if pct_val is not None else ""
-            text = f"{random.choice(source_terms)} Respecto de {topic}, {label} representa {pct_text} del total observado."
-        return f"{text} {random.choice(closing_terms)}"
+            text = f"{random.choice(source_terms)} respecto de {topic}, {label} representa {pct_text} del total observado"
+        text = _lower_after_commas(text)
+        return f"{text}. {random.choice(closing_terms)}"
 
     non_zero = [r for r in base_rows if _row_value(r) > 0]
     if not non_zero:
-        return f"{random.choice(source_terms)} Respecto de {topic}, no se registran casos con valores distintos de cero. {random.choice(closing_terms)}"
+        text = f"{random.choice(source_terms)} respecto de {topic}, no se registran casos con valores distintos de cero"
+        text = _lower_after_commas(text)
+        return f"{text}. {random.choice(closing_terms)}"
     rows_for_stats = non_zero
     denom = sum(_row_value(r) for r in rows_for_stats) or 0.0
 
@@ -132,32 +150,27 @@ def _build_narrative(rows: List[Dict[str, object]], title: str, denominator_code
     leader_n_text = int(leader_n) if leader_n.is_integer() else leader_n
 
     parts = [
-        f"{random.choice(source_terms)} Respecto de {topic}, {random.choice(major_terms)} {leader_label} ({_format_pct(leader_pct)})."
+        f"{random.choice(source_terms)} respecto de {topic}, {random.choice(major_terms)} {leader_label} ({_format_pct(leader_pct)})"
     ]
-
-    if leader_pct > 50:
-        parts.append(random.choice(dominance_terms))
 
     if len(sorted_rows) > 1:
         ordered = [f"{_clean_label(r.get('Etiqueta', ''))} ({_format_pct(row_pct(r))})" for r in sorted_rows[1:]]
         if ordered:
-            if len(ordered) == 1:
-                parts.append(f"Le sigue {ordered[0]}.")
-            else:
-                parts.append(f"Seguido por {', '.join(ordered)}.")
+            parts.append(f"seguido por {_join_with_y(ordered)}")
 
     minor_rows = [r for r in sorted_rows if row_pct(r) < 5]
     if len(minor_rows) >= 3:
         minor_sum = sum(row_pct(r) for r in minor_rows)
-        parts.append(f"En conjunto, las categorías con menos del 5% suman {_format_pct(minor_sum)}.")
+        parts.append(f"en conjunto, las categorías con menos del 5% suman {_format_pct(minor_sum)}")
     elif minor_rows and len(sorted_rows) > 2:
         smallest = min(minor_rows, key=row_pct)
         parts.append(
-            f"Por el contrario, la menor presencia se registra en {smallest.get('Etiqueta', '')} con solo {_format_pct(row_pct(smallest))}."
+            f"por el contrario, la menor presencia se registra en {_clean_label(smallest.get('Etiqueta', ''))} con solo {_format_pct(row_pct(smallest))}"
         )
 
-    parts.append(random.choice(closing_terms))
-    return " ".join(parts)
+    text = ", ".join(parts)
+    text = _lower_after_commas(text)
+    return f"{text}. {random.choice(closing_terms)}"
 
 def _safe_filename(name: str) -> str:
     name = name.strip()
