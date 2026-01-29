@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 import re
 from typing import Dict, List
 
@@ -16,6 +17,122 @@ def _format_n(value: float) -> int | float:
         return int(round(value))
     return round(value, 1)
 
+
+def _format_pct(value: float) -> str:
+    return f"{round(value, 1)}%"
+
+
+def _parse_pct(value: object) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    try:
+        text = str(value).strip()
+        if not text:
+            return None
+        return float(text.replace("%", "").replace(",", "."))
+    except Exception:
+        return None
+
+
+def _row_value(row: Dict[str, object]) -> float:
+    try:
+        return float(row.get("n") or 0)
+    except Exception:
+        return 0.0
+
+
+def _build_narrative(rows: List[Dict[str, object]]) -> str:
+    major_terms = [
+        "La mayor concentración",
+        "La prevalencia",
+        "El grueso de la población",
+        "La cifra más alta",
+    ]
+    count_terms = [
+        lambda n: f"{n} registros",
+        lambda n: f"{n} contabilizaciones",
+        lambda n: f"un volumen de {n}",
+        lambda n: f"{n} casos",
+    ]
+    dominance_terms = [
+        "Es la categoría predominante.",
+        "Abarca más de la mitad de la muestra.",
+        "Concentra más del 50% de los casos.",
+    ]
+    closing_terms = [
+        "A continuación, se presentan los resultados señalados en la siguiente tabla.",
+        "A continuación, se presenta la tabla con los resultados indicados.",
+        "En la tabla siguiente se detallan los resultados reportados.",
+    ]
+
+    base_rows = [r for r in rows if not r.get("is_total") and not r.get("is_subtotal")]
+    if not base_rows:
+        return random.choice(closing_terms)
+
+    if len(base_rows) == 1:
+        row = base_rows[0]
+        label = row.get("Etiqueta", "")
+        n_val = _row_value(row)
+        pct_val = _parse_pct(row.get("Porcentaje"))
+        if n_val == 0:
+            text = f"No se registran casos en {label} (0 casos)."
+        else:
+            pct_text = _format_pct(pct_val) if pct_val is not None else ""
+            text = f"Se registran {int(n_val) if n_val.is_integer() else n_val} casos en {label}"
+            if pct_text:
+                text += f", equivalentes al {pct_text} del total."
+            else:
+                text += "."
+        return f"{text} {random.choice(closing_terms)}"
+
+    non_zero = [r for r in base_rows if _row_value(r) > 0]
+    if not non_zero:
+        return f"No se registran casos con valores distintos de cero. {random.choice(closing_terms)}"
+    rows_for_stats = non_zero
+    denom = sum(_row_value(r) for r in rows_for_stats) or 0.0
+
+    def row_pct(row: Dict[str, object]) -> float:
+        parsed = _parse_pct(row.get("Porcentaje"))
+        if parsed is not None:
+            return parsed
+        if denom <= 0:
+            return 0.0
+        return (_row_value(row) / denom) * 100
+
+    sorted_rows = sorted(rows_for_stats, key=row_pct, reverse=True)
+    leader = sorted_rows[0]
+    leader_pct = row_pct(leader)
+    leader_label = leader.get("Etiqueta", "")
+    leader_n = _row_value(leader)
+    leader_n_text = int(leader_n) if leader_n.is_integer() else leader_n
+
+    count_phrase = random.choice(count_terms)(leader_n_text)
+    parts = [
+        f"{random.choice(major_terms)} se observa en {leader_label}, con {count_phrase}, representando el {_format_pct(leader_pct)} del total."
+    ]
+
+    if leader_pct > 50:
+        parts.append(random.choice(dominance_terms))
+
+    if len(sorted_rows) > 1:
+        second = sorted_rows[1]
+        second_pct = row_pct(second)
+        parts.append(f"Le sigue {second.get('Etiqueta', '')} con {_format_pct(second_pct)}.")
+
+    minor_rows = [r for r in sorted_rows if row_pct(r) < 5]
+    if len(minor_rows) >= 3:
+        minor_sum = sum(row_pct(r) for r in minor_rows)
+        parts.append(f"En conjunto, las categorías con menos del 5% suman {_format_pct(minor_sum)}.")
+    elif minor_rows:
+        smallest = min(minor_rows, key=row_pct)
+        parts.append(
+            f"Por el contrario, la menor presencia se registra en {smallest.get('Etiqueta', '')} con solo {_format_pct(row_pct(smallest))}."
+        )
+
+    parts.append(random.choice(closing_terms))
+    return " ".join(parts)
 
 def _safe_filename(name: str) -> str:
     name = name.strip()
@@ -124,6 +241,7 @@ def build_reports(
                 "title": group_title,
                 "rows": rows,
                 "csv_path": str(csv_path),
+                "category_col": category_col,
             }
         )
 
@@ -161,11 +279,17 @@ def build_reports(
     try:
         doc = Document()
         doc.add_heading("Reporte consolidado", level=1)
-        for rep in reports:
-            doc.add_heading(rep["title"], level=2)
-            df_rows = pd.DataFrame(rep["rows"])
+
+        def add_table(
+            doc_ref: Document,
+            row_dicts: List[Dict[str, object]],
+            category_col: str | None = None,
+        ) -> None:
+            df_rows = pd.DataFrame(row_dicts)
             cols = [c for c in df_rows.columns if c not in {"is_total", "is_subtotal"}]
-            table = doc.add_table(rows=1, cols=len(cols))
+            if category_col and category_col in cols:
+                cols = [category_col] + [c for c in cols if c != category_col]
+            table = doc_ref.add_table(rows=1, cols=len(cols))
             table.style = "Table Grid"
             hdr = table.rows[0].cells
             for idx, col in enumerate(cols):
@@ -179,6 +303,41 @@ def build_reports(
                     run = cells[idx].paragraphs[0].add_run(text)
                     if is_total:
                         run.bold = True
+
+        # Seccion 1: solo tablas
+        doc.add_heading("Sección 1: Tablas", level=1)
+        for idx, rep in enumerate(reports, start=1):
+            doc.add_heading(f"Tabla {idx}. {rep['title']}", level=2)
+            add_table(doc, rep["rows"], rep.get("category_col"))
+
+        # Seccion 2: narrativa + tablas
+        doc.add_heading("Sección 2: Tablas con narrativa", level=1)
+        table_counter = 1
+        for rep in reports:
+            category_col = rep.get("category_col")
+            rows = rep["rows"]
+            if category_col:
+                categories = [
+                    cat
+                    for cat in sorted({r.get(category_col, "") for r in rows})
+                    if cat
+                ]
+                for cat in categories:
+                    sub_rows = [
+                        r
+                        for r in rows
+                        if r.get(category_col) == cat
+                        or (r.get("is_subtotal") and r.get(category_col) == cat)
+                    ]
+                    doc.add_heading(f"Tabla {table_counter}. {rep['title']} - {cat}", level=2)
+                    doc.add_paragraph(_build_narrative(sub_rows))
+                    add_table(doc, sub_rows, rep.get("category_col"))
+                    table_counter += 1
+            else:
+                doc.add_heading(f"Tabla {table_counter}. {rep['title']}", level=2)
+                doc.add_paragraph(_build_narrative(rows))
+                add_table(doc, rows, rep.get("category_col"))
+                table_counter += 1
         doc.save(combined_docx)
     except Exception:
         combined_docx = RESULTS_DIR / f"{output_prefix}consolidado_docx_error.txt"
