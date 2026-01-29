@@ -3,11 +3,10 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 
 from app.models.schemas import ReportRequest, ReportResponse, ReportResult
-from app.services.dictionary_reader import dictionary_map
 from app.services.filter_reader import read_filter_excel
 from app.services.gpkg_reader import get_table_columns, load_layer, load_layer_by_names
-from app.services.grouping import group_columns
 from app.services.mapping_reader import load_mapping_csv
+from app.services.group_rules import build_group_specs
 from app.services.reporting import build_reports
 from app.store import store
 from app.config import VARIABLES_DICT_PATH
@@ -31,43 +30,28 @@ def report(req: ReportRequest) -> ReportResponse:
         filter_info = read_filter_excel(str(stored.path))
 
         cols = get_table_columns(req.layer)
-        all_fields = [
+        available_fields = [
             name
             for name, dtype in cols
-            if str(name).startswith("n_")
-            and str(dtype).lower().strip() in NUMERIC_TYPES
+            if str(dtype).lower().strip() in NUMERIC_TYPES
         ]
 
-        labels = {}
-        details = {}
-        group_labels = {}
+        if not VARIABLES_DICT_PATH.exists():
+            raise HTTPException(status_code=400, detail="No se encontró data/diccionario_variables.csv")
 
-        if VARIABLES_DICT_PATH.exists():
-            mapping_df = load_mapping_csv(str(VARIABLES_DICT_PATH))
-            mapping_df = mapping_df[mapping_df["Variable_Codigo"].isin(all_fields)]
-            groups_map = {
-                f"{tema} / {subtema}": gdf["Variable_Codigo"].tolist()
-                for (tema, subtema), gdf in mapping_df.groupby(["Tema", "Subtema"])
-            }
-            for row in mapping_df.itertuples(index=False):
-                labels[row.Variable_Codigo] = row.Descripcion_Etiqueta
-                details[row.Variable_Codigo] = row.Valores_Codigos_y_Detalle
-            for (tema, subtema), _ in mapping_df.groupby(["Tema", "Subtema"]):
-                group_labels[f"{tema} / {subtema}"] = f"{subtema}"
-        else:
-            groups_map = group_columns(all_fields)
-            dict_map = dictionary_map(req.layer)
-            for key, meta in dict_map.items():
-                labels[key] = meta.get("description", key)
-                details[key] = meta.get("visual", "")
+        mapping_df = load_mapping_csv(str(VARIABLES_DICT_PATH))
+        group_specs, labels, details = build_group_specs(mapping_df, available_fields)
 
-        selected_groups = {g: groups_map[g] for g in req.groups if g in groups_map}
+        selected_groups = {g: group_specs[g] for g in req.groups if g in group_specs}
         if not selected_groups:
             raise HTTPException(status_code=400, detail="No valid groups selected")
 
         needed_columns = set()
-        for cols in selected_groups.values():
-            needed_columns.update(cols)
+        for spec in selected_groups.values():
+            needed_columns.update(spec["variables"])
+            denom = spec.get("denominator")
+            if denom in {"n_per", "n_hog", "n_vp"}:
+                needed_columns.add(denom)
 
         needed_columns.update(["ID_ENTIDAD", "ENTIDAD", "LOCALIDAD", "COMUNA"])
 
@@ -77,22 +61,27 @@ def report(req: ReportRequest) -> ReportResponse:
         else:
             df = load_layer_by_names(req.layer, list(needed_columns), filter_info["names"])
 
+        var_sum = {}
+        for col in needed_columns:
+            if col in df.columns and col.startswith("n_"):
+                series = df[col]
+                var_sum[col] = float(series.fillna(0).sum())
+
         result = build_reports(
-            df,
+            var_sum,
             selected_groups,
             labels,
             details,
             output_prefix="reporte_",
-            group_labels=group_labels,
         )
 
         reports = []
         for r in result["reports"]:
             reports.append(
                 ReportResult(
-                    group=r["group"],
-                    group_label=r["group_label"],
-                    total=r["total"],
+                    group=r["title"],
+                    group_label=r["title"],
+                    total="",
                     rows_count=len(r["rows"]),
                     csv_path=r["csv_path"],
                 )
