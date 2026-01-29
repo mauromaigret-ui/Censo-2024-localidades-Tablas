@@ -181,7 +181,7 @@ function renderResults(data) {
     card.className = "result-card";
     card.innerHTML = `
       <div class="group-title">${report.group_label || report.group}</div>
-      <div class="group-meta">Total: ${report.total} · Filas: ${report.rows_count}</div>
+      <div class="group-meta">Filas: ${report.rows_count}</div>
       <div class="group-meta">CSV: <code>${report.csv_path}</code></div>
     `;
     wrapper.appendChild(card);

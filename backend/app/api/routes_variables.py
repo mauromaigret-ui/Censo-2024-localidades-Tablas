@@ -5,12 +5,11 @@ from fastapi import APIRouter, HTTPException, Query
 from app.models.schemas import VariablesResponse, VariableGroup, VariableField
 from app.services.dictionary_reader import dictionary_map
 from app.services.gpkg_reader import get_table_columns
-from app.services.grouping import group_columns
 from app.services.mapping_reader import load_mapping_csv
+from app.services.group_rules import build_group_specs
 from app.config import VARIABLES_DICT_PATH
 
 router = APIRouter()
-
 
 NUMERIC_TYPES = {
     "integer",
@@ -28,47 +27,51 @@ def variables(layer: str = Query(...)) -> VariablesResponse:
         cols = get_table_columns(layer)
         dict_map = dictionary_map(layer)
 
-        fields = []
-        for name, dtype in cols:
-            dtype_norm = str(dtype).lower().strip()
-            if not str(name).startswith("n_"):
-                continue
-            if dtype_norm in NUMERIC_TYPES:
-                fields.append(name)
+        available_fields = [
+            name
+            for name, dtype in cols
+            if str(dtype).lower().strip() in NUMERIC_TYPES
+        ]
 
         group_list = []
         if VARIABLES_DICT_PATH.exists():
             mapping_df = load_mapping_csv(str(VARIABLES_DICT_PATH))
-            mapping_df = mapping_df[mapping_df["Variable_Codigo"].isin(fields)]
-            for (tema, subtema), gdf in mapping_df.groupby(["Tema", "Subtema"]):
-                group_name = f"{tema} / {subtema}"
+            group_specs, labels, details = build_group_specs(mapping_df, available_fields)
+            for group_title, spec in group_specs.items():
                 field_list = []
-                for row in gdf.itertuples(index=False):
-                    meta = dict_map.get(row.Variable_Codigo, {})
+                for code in spec["variables"]:
+                    meta = dict_map.get(code, {})
                     field_list.append(
                         VariableField(
-                            name=row.Variable_Codigo,
+                            name=code,
                             description=meta.get("description", ""),
-                            label=row.Descripcion_Etiqueta,
-                            detail=row.Valores_Codigos_y_Detalle,
+                            label=labels.get(code),
+                            detail=details.get(code),
                             dtype=meta.get("dtype", ""),
                         )
                     )
-                group_list.append(VariableGroup(group=group_name, fields=field_list))
+                group_list.append(VariableGroup(group=group_title, fields=field_list))
         else:
-            groups = group_columns(fields)
-            for group_name, cols in groups.items():
-                field_list = []
-                for c in cols:
-                    meta = dict_map.get(c, {})
-                    field_list.append(
-                        VariableField(
-                            name=c,
-                            description=meta.get("description", ""),
-                            dtype=meta.get("dtype", ""),
-                        )
+            # fallback simple grouping
+            fields = [
+                name
+                for name, dtype in cols
+                if str(name).startswith("n_") and str(dtype).lower().strip() in NUMERIC_TYPES
+            ]
+            for name in fields:
+                meta = dict_map.get(name, {})
+                group_list.append(
+                    VariableGroup(
+                        group=name,
+                        fields=[
+                            VariableField(
+                                name=name,
+                                description=meta.get("description", ""),
+                                dtype=meta.get("dtype", ""),
+                            )
+                        ],
                     )
-                group_list.append(VariableGroup(group=group_name, fields=field_list))
+                )
 
         group_list = sorted(group_list, key=lambda g: g.group)
         return VariablesResponse(layer=layer, groups=group_list)
