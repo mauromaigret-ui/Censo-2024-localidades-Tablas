@@ -29,7 +29,6 @@ def build_reports(
     var_sum: Dict[str, float],
     group_specs: Dict[str, Dict],
     labels: Dict[str, str],
-    details: Dict[str, str],
     output_prefix: str,
 ) -> Dict[str, object]:
     reports = []
@@ -41,19 +40,20 @@ def build_reports(
 
         category_col = spec.get("category_col")
         category_map = spec.get("category_map", {})
+        label_override = spec.get("label_override", {})
         denominator = spec.get("denominator", "sum")
         total_label = spec.get("total_label", "Total")
+        no_total = spec.get("no_total", False)
 
         rows = []
 
-        # Build base rows
         for code in vars_list:
             value = float(var_sum.get(code, 0.0))
             value_display = _format_n(value)
             row = {
-                "Etiqueta": labels.get(code, code),
+                "Etiqueta": label_override.get(code, labels.get(code, code)),
                 "n": value_display,
-                "Pct": None,
+                "Porcentaje": "",
                 "is_total": False,
                 "is_subtotal": False,
             }
@@ -61,33 +61,27 @@ def build_reports(
                 row[category_col] = category_map.get(code, "")
             rows.append(row)
 
-        # Compute pct and totals
         if denominator == "by_category" and category_col:
-            # subtotal per category
             categories = {}
             for row in rows:
                 cat = row.get(category_col, "")
                 categories.setdefault(cat, 0.0)
                 categories[cat] += float(row["n"]) if row["n"] is not None else 0.0
 
-            # pct per category
             for row in rows:
                 cat = row.get(category_col, "")
                 denom = categories.get(cat, 0.0)
                 if denom > 0:
-                    row["Pct"] = f"{round((float(row['n']) / denom) * 100, 1)}%"
-                else:
-                    row["Pct"] = ""
+                    row["Porcentaje"] = f"{round((float(row['n']) / denom) * 100, 1)}%"
 
-            # append subtotal rows
             for cat, subtotal in categories.items():
                 subtotal_display = _format_n(subtotal)
                 rows.append(
                     {
-                        "Etiqueta": f"{total_label} {cat}",
+                        "Etiqueta": total_label,
                         category_col: cat,
                         "n": subtotal_display,
-                        "Pct": "100%" if subtotal > 0 else "",
+                        "Porcentaje": "100%" if subtotal > 0 else "",
                         "is_total": True,
                         "is_subtotal": True,
                     }
@@ -102,37 +96,36 @@ def build_reports(
 
             for row in rows:
                 if denom_value > 0 and row["n"] is not None:
-                    row["Pct"] = f"{round((float(row['n']) / denom_value) * 100, 1)}%"
-                else:
-                    row["Pct"] = ""
+                    row["Porcentaje"] = f"{round((float(row['n']) / denom_value) * 100, 1)}%"
 
-            # add total row
-            total_display = _format_n(denom_value)
-            rows.append(
-                {
-                    "Etiqueta": total_label,
-                    **({category_col: ""} if category_col else {}),
-                    "n": total_display,
-                    "Pct": "100%" if denom_value > 0 else "",
-                    "is_total": True,
-                    "is_subtotal": False,
-                }
-            )
+            if not no_total and total_label:
+                total_display = _format_n(denom_value)
+                rows.append(
+                    {
+                        "Etiqueta": total_label,
+                        **({category_col: ""} if category_col else {}),
+                        "n": total_display,
+                        "Porcentaje": "100%" if denom_value > 0 else "",
+                        "is_total": True,
+                        "is_subtotal": False,
+                    }
+                )
 
-        # store
+        safe_name = _safe_filename(group_title)
+        csv_path = RESULTS_DIR / f"{output_prefix}{safe_name}.csv"
+        df_rows = pd.DataFrame(rows)
+        cols = [c for c in df_rows.columns if c not in {"is_total", "is_subtotal"}]
+        if category_col:
+            cols = [category_col] + [c for c in cols if c != category_col]
+        df_rows[cols].to_csv(csv_path, index=False)
+
         reports.append(
             {
                 "title": group_title,
                 "rows": rows,
-                "csv_path": str(RESULTS_DIR / f"{output_prefix}{_safe_filename(group_title)}.csv"),
+                "csv_path": str(csv_path),
             }
         )
-
-        # write per-table csv
-        df_rows = pd.DataFrame(rows)
-        cols = [c for c in df_rows.columns if c not in {"is_total", "is_subtotal"}]
-        df_rows = df_rows[cols]
-        df_rows.to_csv(reports[-1]["csv_path"], index=False)
 
     # consolidated outputs
     combined_csv = RESULTS_DIR / f"{output_prefix}consolidado.csv"
@@ -140,7 +133,6 @@ def build_reports(
     combined_html = RESULTS_DIR / f"{output_prefix}consolidado.html"
     combined_docx = RESULTS_DIR / f"{output_prefix}consolidado.docx"
 
-    # CSV/HTML/DOCX/XLSX consolidated
     all_rows = []
     for rep in reports:
         for row in rep["rows"]:
@@ -177,7 +169,8 @@ def build_reports(
             table.style = "Table Grid"
             hdr = table.rows[0].cells
             for idx, col in enumerate(cols):
-                hdr[idx].text = col
+                run = hdr[idx].paragraphs[0].add_run(col)
+                run.bold = True
             for _, row in df_rows.iterrows():
                 cells = table.add_row().cells
                 is_total = bool(row.get("is_total", False))

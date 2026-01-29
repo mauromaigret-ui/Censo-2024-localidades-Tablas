@@ -36,7 +36,7 @@ def variables(layer: str = Query(...)) -> VariablesResponse:
         group_list = []
         if VARIABLES_DICT_PATH.exists():
             mapping_df = load_mapping_csv(str(VARIABLES_DICT_PATH))
-            group_specs, labels, details = build_group_specs(mapping_df, available_fields)
+            group_specs, labels = build_group_specs(mapping_df, available_fields)
             for group_title, spec in group_specs.items():
                 field_list = []
                 for code in spec["variables"]:
@@ -46,7 +46,7 @@ def variables(layer: str = Query(...)) -> VariablesResponse:
                             name=code,
                             description=meta.get("description", ""),
                             label=labels.get(code),
-                            detail=details.get(code),
+                            detail=None,
                             dtype=meta.get("dtype", ""),
                         )
                     )
