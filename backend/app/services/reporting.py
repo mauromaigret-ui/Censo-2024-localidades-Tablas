@@ -44,7 +44,26 @@ def _row_value(row: Dict[str, object]) -> float:
         return 0.0
 
 
-def _build_narrative(rows: List[Dict[str, object]]) -> str:
+def _topic_from_title(title: str) -> str:
+    topic = title.strip()
+    topic = re.sub(r"\s*\((personas|hogares|viviendas)\)\s*$", "", topic, flags=re.IGNORECASE)
+    topic = topic.strip()
+    if not topic:
+        return "la tabla"
+    # Ensure it reads naturally in Spanish
+    if topic.lower().startswith(("población", "estado", "materialidad", "servicios", "tenencia", "tic")):
+        return f"la {topic.lower()}"
+    return topic.lower()
+
+
+def _clean_label(label: str) -> str:
+    text = (label or "").strip()
+    text = re.sub(r"^Total\s+de\s+", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"^Total\s+", "", text, flags=re.IGNORECASE)
+    return text.strip()
+
+
+def _build_narrative(rows: List[Dict[str, object]], title: str, denominator_code: str | None = None) -> str:
     source_terms = [
         "De acuerdo al Censo 2024,",
         "Según el Censo 2024,",
@@ -67,25 +86,33 @@ def _build_narrative(rows: List[Dict[str, object]]) -> str:
         "En la tabla siguiente se detallan los resultados reportados.",
     ]
 
-    base_rows = [r for r in rows if not r.get("is_total") and not r.get("is_subtotal")]
+    base_rows = [
+        r
+        for r in rows
+        if not r.get("is_total")
+        and not r.get("is_subtotal")
+        and (denominator_code is None or r.get("code") != denominator_code)
+    ]
     if not base_rows:
         return f"{random.choice(source_terms)} {random.choice(closing_terms)}"
 
+    topic = _topic_from_title(title)
+
     if len(base_rows) == 1:
         row = base_rows[0]
-        label = row.get("Etiqueta", "")
+        label = _clean_label(row.get("Etiqueta", ""))
         n_val = _row_value(row)
         pct_val = _parse_pct(row.get("Porcentaje"))
         if n_val == 0:
-            text = f"{random.choice(source_terms)} No se registran casos en {label} (0 casos)."
+            text = f"{random.choice(source_terms)} Respecto de {topic}, no se registran casos en {label} (0 casos)."
         else:
             pct_text = _format_pct(pct_val) if pct_val is not None else ""
-            text = f"{random.choice(source_terms)} {label} representa {pct_text} del total observado."
+            text = f"{random.choice(source_terms)} Respecto de {topic}, {label} representa {pct_text} del total observado."
         return f"{text} {random.choice(closing_terms)}"
 
     non_zero = [r for r in base_rows if _row_value(r) > 0]
     if not non_zero:
-        return f"{random.choice(source_terms)} No se registran casos con valores distintos de cero. {random.choice(closing_terms)}"
+        return f"{random.choice(source_terms)} Respecto de {topic}, no se registran casos con valores distintos de cero. {random.choice(closing_terms)}"
     rows_for_stats = non_zero
     denom = sum(_row_value(r) for r in rows_for_stats) or 0.0
 
@@ -100,21 +127,24 @@ def _build_narrative(rows: List[Dict[str, object]]) -> str:
     sorted_rows = sorted(rows_for_stats, key=row_pct, reverse=True)
     leader = sorted_rows[0]
     leader_pct = row_pct(leader)
-    leader_label = leader.get("Etiqueta", "")
+    leader_label = _clean_label(leader.get("Etiqueta", ""))
     leader_n = _row_value(leader)
     leader_n_text = int(leader_n) if leader_n.is_integer() else leader_n
 
     parts = [
-        f"{random.choice(source_terms)} {random.choice(major_terms)} {leader_label} ({_format_pct(leader_pct)})."
+        f"{random.choice(source_terms)} Respecto de {topic}, {random.choice(major_terms)} {leader_label} ({_format_pct(leader_pct)})."
     ]
 
     if leader_pct > 50:
         parts.append(random.choice(dominance_terms))
 
     if len(sorted_rows) > 1:
-        ordered = [f"{r.get('Etiqueta', '')} ({_format_pct(row_pct(r))})" for r in sorted_rows[1:]]
+        ordered = [f"{_clean_label(r.get('Etiqueta', ''))} ({_format_pct(row_pct(r))})" for r in sorted_rows[1:]]
         if ordered:
-            parts.append(f"Le sigue {ordered[0]}." if len(ordered) == 1 else f"En orden decreciente, continúan {', '.join(ordered)}.")
+            if len(ordered) == 1:
+                parts.append(f"Le sigue {ordered[0]}.")
+            else:
+                parts.append(f"Seguido por {', '.join(ordered)}.")
 
     minor_rows = [r for r in sorted_rows if row_pct(r) < 5]
     if len(minor_rows) >= 3:
@@ -168,6 +198,7 @@ def build_reports(
                 "Porcentaje": "",
                 "is_total": False,
                 "is_subtotal": False,
+                "code": code,
             }
             if category_col:
                 row[category_col] = category_map.get(code, "")
@@ -226,7 +257,7 @@ def build_reports(
         safe_name = _safe_filename(group_title)
         csv_path = RESULTS_DIR / f"{output_prefix}{safe_name}.csv"
         df_rows = pd.DataFrame(rows)
-        cols = [c for c in df_rows.columns if c not in {"is_total", "is_subtotal"}]
+        cols = [c for c in df_rows.columns if c not in {"is_total", "is_subtotal", "code"}]
         if category_col:
             cols = [category_col] + [c for c in cols if c != category_col]
         df_rows[cols].to_csv(csv_path, index=False)
@@ -237,6 +268,7 @@ def build_reports(
                 "rows": rows,
                 "csv_path": str(csv_path),
                 "category_col": category_col,
+                "denominator": denominator if isinstance(denominator, str) else None,
             }
         )
 
@@ -260,14 +292,14 @@ def build_reports(
         for rep in reports:
             sheet_name = _safe_filename(rep["title"])[:31]
             df_rows = pd.DataFrame(rep["rows"])
-            cols = [c for c in df_rows.columns if c not in {"is_total", "is_subtotal"}]
+            cols = [c for c in df_rows.columns if c not in {"is_total", "is_subtotal", "code"}]
             df_rows[cols].to_excel(writer, index=False, sheet_name=sheet_name)
 
     html_parts = ["<h1>Reporte consolidado</h1>"]
     for rep in reports:
         html_parts.append(f"<h2>{rep['title']}</h2>")
         df_rows = pd.DataFrame(rep["rows"])
-        cols = [c for c in df_rows.columns if c not in {"is_total", "is_subtotal"}]
+        cols = [c for c in df_rows.columns if c not in {"is_total", "is_subtotal", "code"}]
         html_parts.append(df_rows[cols].to_html(index=False))
     combined_html.write_text("\n".join(html_parts), encoding="utf-8")
 
@@ -281,7 +313,7 @@ def build_reports(
             category_col: str | None = None,
         ) -> None:
             df_rows = pd.DataFrame(row_dicts)
-            cols = [c for c in df_rows.columns if c not in {"is_total", "is_subtotal"}]
+            cols = [c for c in df_rows.columns if c not in {"is_total", "is_subtotal", "code"}]
             if category_col and category_col in cols:
                 cols = [category_col] + [c for c in cols if c != category_col]
             table = doc_ref.add_table(rows=1, cols=len(cols))
@@ -325,12 +357,18 @@ def build_reports(
                         or (r.get("is_subtotal") and r.get(category_col) == cat)
                     ]
                     doc.add_heading(f"Tabla {table_counter}. {rep['title']} - {cat}", level=2)
-                    doc.add_paragraph(_build_narrative(sub_rows))
+                    doc.add_paragraph(
+                        _build_narrative(
+                            sub_rows,
+                            f"{rep['title']} - {cat}",
+                            rep.get("denominator"),
+                        )
+                    )
                     add_table(doc, sub_rows, rep.get("category_col"))
                     table_counter += 1
             else:
                 doc.add_heading(f"Tabla {table_counter}. {rep['title']}", level=2)
-                doc.add_paragraph(_build_narrative(rows))
+                doc.add_paragraph(_build_narrative(rows, rep["title"], rep.get("denominator")))
                 add_table(doc, rows, rep.get("category_col"))
                 table_counter += 1
         doc.save(combined_docx)
