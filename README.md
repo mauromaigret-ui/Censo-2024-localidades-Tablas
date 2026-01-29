@@ -2,6 +2,14 @@
 
 App local con interfaz en navegador para generar tabulados por entidad censal a partir de la cartografía (GPKG).
 
+## ✅ Estado seguro (reporte Word OK)
+Tag en GitHub: `word-report-ok`  
+Para volver a este estado:
+```bash
+git fetch --tags
+git checkout word-report-ok
+```
+
 ## Requisitos
 - Python 3.11+
 
