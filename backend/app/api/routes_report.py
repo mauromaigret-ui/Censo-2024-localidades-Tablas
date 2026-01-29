@@ -81,7 +81,7 @@ def report(req: ReportRequest) -> ReportResponse:
                 ReportResult(
                     group=r["title"],
                     group_label=r["title"],
-                    total="",
+                    total=None,
                     rows_count=len(r["rows"]),
                     csv_path=r["csv_path"],
                 )

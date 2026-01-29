@@ -56,7 +56,7 @@ class ReportRow(BaseModel):
 class ReportResult(BaseModel):
     group: str
     group_label: str
-    total: float
+    total: Optional[float] = None
     rows_count: int
     csv_path: str
 
