@@ -125,6 +125,40 @@ def build_group_specs(mapping_df: pd.DataFrame, available_fields: List[str]) -> 
         )
         remove_group("2. Variables de Población (Personas) / Religión")
 
+    # Empleo: estado, dependencia (CISE) y ocupación (CIUO)
+    empleo_vars = get_group("3. Educación y Empleo", "Empleo")
+    if empleo_vars:
+        status_vars = [v for v in ["n_ocupado", "n_desocupado", "n_fuera_fuerza_trabajo"] if v in empleo_vars]
+        dependencia_vars = [v for v in empleo_vars if v.startswith("n_cise_rec_")]
+        if status_vars:
+            add_group(
+                "Empleo (personas)",
+                status_vars,
+                denominator="sum",
+                total_label="Total",
+                unit="personas",
+            )
+        if dependencia_vars:
+            add_group(
+                "Empleo - Dependencia (personas)",
+                dependencia_vars,
+                denominator="sum",
+                total_label="Total",
+                unit="personas",
+            )
+        remove_group("3. Educación y Empleo / Empleo")
+
+    ciuo_vars = get_group("3. Educación y Empleo", "Ocupación (CIUO)")
+    if ciuo_vars:
+        add_group(
+            "Empleo - Ocupación (personas)",
+            ciuo_vars,
+            denominator="sum",
+            total_label="Total",
+            unit="personas",
+        )
+        remove_group("3. Educación y Empleo / Ocupación (CIUO)")
+
     # TICs
     tics_vars = get_group("4. Viviendas y Hogares", "TICs")
     if tics_vars:
@@ -219,5 +253,42 @@ def build_group_specs(mapping_df: pd.DataFrame, available_fields: List[str]) -> 
         if unit:
             title = f"{title} ({unit})"
         add_group(title, vars_list, denominator="sum", total_label="Total", unit=unit)
+
+    def order_key(title: str) -> tuple:
+        t = title.lower()
+        if "población según sexo" in t:
+            return (1, 1, t)
+        if "población según tramos de edad" in t:
+            return (1, 2, t)
+        if "estado civil" in t:
+            return (1, 3, t)
+        if "discapacidad" in t:
+            return (1, 4, t)
+        if "educación" in t:
+            return (2, 1, t)
+        if "migración" in t:
+            return (3, 1, t)
+        if "pueblos originarios" in t:
+            return (4, 1, t)
+        if "afrodescendiente" in t:
+            return (4, 2, t)
+        if "lengua indígena" in t:
+            return (4, 3, t)
+        if "religión" in t:
+            return (5, 1, t)
+        if "empleo - dependencia" in t:
+            return (6, 1, t)
+        if "empleo - ocupación" in t or "ocupación" in t:
+            return (6, 2, t)
+        if "empleo" in t or "rama" in t or "transporte" in t:
+            return (6, 3, t)
+        if "hogares" in t or "(hogares)" in t or "tenencia" in t or "tics" in t:
+            return (7, 1, t)
+        if "(viviendas)" in t or "vivienda" in t or "materialidad" in t or "servicios básicos" in t:
+            return (8, 1, t)
+        return (9, 1, t)
+
+    ordered_titles = sorted(group_specs.keys(), key=order_key)
+    group_specs = {title: group_specs[title] for title in ordered_titles}
 
     return group_specs, labels

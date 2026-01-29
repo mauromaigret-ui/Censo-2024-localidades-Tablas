@@ -73,7 +73,6 @@ def variables(layer: str = Query(...)) -> VariablesResponse:
                     )
                 )
 
-        group_list = sorted(group_list, key=lambda g: g.group)
         return VariablesResponse(layer=layer, groups=group_list)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
