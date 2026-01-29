@@ -19,7 +19,8 @@ def _format_n(value: float) -> int | float:
 
 
 def _format_pct(value: float) -> str:
-    return f"{round(value, 1)}%"
+    text = f"{round(value, 1):.1f}".replace(".", ",")
+    return f"{text}%"
 
 
 def _parse_pct(value: object) -> float | None:
@@ -44,17 +45,16 @@ def _row_value(row: Dict[str, object]) -> float:
 
 
 def _build_narrative(rows: List[Dict[str, object]]) -> str:
-    major_terms = [
-        "La mayor concentración",
-        "La prevalencia",
-        "El grueso de la población",
-        "La cifra más alta",
+    source_terms = [
+        "De acuerdo al Censo 2024,",
+        "Según el Censo 2024,",
+        "De acuerdo al Censo (2024),",
     ]
-    count_terms = [
-        lambda n: f"{n} registros",
-        lambda n: f"{n} contabilizaciones",
-        lambda n: f"un volumen de {n}",
-        lambda n: f"{n} casos",
+    major_terms = [
+        "La mayor proporción corresponde a",
+        "La mayoría se concentra en",
+        "La categoría predominante es",
+        "La proporción más alta se observa en",
     ]
     dominance_terms = [
         "Es la categoría predominante.",
@@ -69,7 +69,7 @@ def _build_narrative(rows: List[Dict[str, object]]) -> str:
 
     base_rows = [r for r in rows if not r.get("is_total") and not r.get("is_subtotal")]
     if not base_rows:
-        return random.choice(closing_terms)
+        return f"{random.choice(source_terms)} {random.choice(closing_terms)}"
 
     if len(base_rows) == 1:
         row = base_rows[0]
@@ -77,19 +77,15 @@ def _build_narrative(rows: List[Dict[str, object]]) -> str:
         n_val = _row_value(row)
         pct_val = _parse_pct(row.get("Porcentaje"))
         if n_val == 0:
-            text = f"No se registran casos en {label} (0 casos)."
+            text = f"{random.choice(source_terms)} No se registran casos en {label} (0 casos)."
         else:
             pct_text = _format_pct(pct_val) if pct_val is not None else ""
-            text = f"Se registran {int(n_val) if n_val.is_integer() else n_val} casos en {label}"
-            if pct_text:
-                text += f", equivalentes al {pct_text} del total."
-            else:
-                text += "."
+            text = f"{random.choice(source_terms)} {label} representa {pct_text} del total observado."
         return f"{text} {random.choice(closing_terms)}"
 
     non_zero = [r for r in base_rows if _row_value(r) > 0]
     if not non_zero:
-        return f"No se registran casos con valores distintos de cero. {random.choice(closing_terms)}"
+        return f"{random.choice(source_terms)} No se registran casos con valores distintos de cero. {random.choice(closing_terms)}"
     rows_for_stats = non_zero
     denom = sum(_row_value(r) for r in rows_for_stats) or 0.0
 
@@ -108,24 +104,23 @@ def _build_narrative(rows: List[Dict[str, object]]) -> str:
     leader_n = _row_value(leader)
     leader_n_text = int(leader_n) if leader_n.is_integer() else leader_n
 
-    count_phrase = random.choice(count_terms)(leader_n_text)
     parts = [
-        f"{random.choice(major_terms)} se observa en {leader_label}, con {count_phrase}, representando el {_format_pct(leader_pct)} del total."
+        f"{random.choice(source_terms)} {random.choice(major_terms)} {leader_label} ({_format_pct(leader_pct)})."
     ]
 
     if leader_pct > 50:
         parts.append(random.choice(dominance_terms))
 
     if len(sorted_rows) > 1:
-        second = sorted_rows[1]
-        second_pct = row_pct(second)
-        parts.append(f"Le sigue {second.get('Etiqueta', '')} con {_format_pct(second_pct)}.")
+        ordered = [f"{r.get('Etiqueta', '')} ({_format_pct(row_pct(r))})" for r in sorted_rows[1:]]
+        if ordered:
+            parts.append(f"Le sigue {ordered[0]}." if len(ordered) == 1 else f"En orden decreciente, continúan {', '.join(ordered)}.")
 
     minor_rows = [r for r in sorted_rows if row_pct(r) < 5]
     if len(minor_rows) >= 3:
         minor_sum = sum(row_pct(r) for r in minor_rows)
         parts.append(f"En conjunto, las categorías con menos del 5% suman {_format_pct(minor_sum)}.")
-    elif minor_rows:
+    elif minor_rows and len(sorted_rows) > 2:
         smallest = min(minor_rows, key=row_pct)
         parts.append(
             f"Por el contrario, la menor presencia se registra en {smallest.get('Etiqueta', '')} con solo {_format_pct(row_pct(smallest))}."
@@ -189,7 +184,7 @@ def build_reports(
                 cat = row.get(category_col, "")
                 denom = categories.get(cat, 0.0)
                 if denom > 0:
-                    row["Porcentaje"] = f"{round((float(row['n']) / denom) * 100, 1)}%"
+                    row["Porcentaje"] = _format_pct((float(row["n"]) / denom) * 100)
 
             for cat, subtotal in categories.items():
                 subtotal_display = _format_n(subtotal)
@@ -198,7 +193,7 @@ def build_reports(
                         "Etiqueta": total_label,
                         category_col: cat,
                         "n": subtotal_display,
-                        "Porcentaje": "100%" if subtotal > 0 else "",
+                        "Porcentaje": _format_pct(100) if subtotal > 0 else "",
                         "is_total": True,
                         "is_subtotal": True,
                     }
@@ -213,7 +208,7 @@ def build_reports(
 
             for row in rows:
                 if denom_value > 0 and row["n"] is not None:
-                    row["Porcentaje"] = f"{round((float(row['n']) / denom_value) * 100, 1)}%"
+                    row["Porcentaje"] = _format_pct((float(row["n"]) / denom_value) * 100)
 
             if not no_total and total_label:
                 total_display = _format_n(denom_value)
@@ -222,7 +217,7 @@ def build_reports(
                         "Etiqueta": total_label,
                         **({category_col: ""} if category_col else {}),
                         "n": total_display,
-                        "Porcentaje": "100%" if denom_value > 0 else "",
+                        "Porcentaje": _format_pct(100) if denom_value > 0 else "",
                         "is_total": True,
                         "is_subtotal": False,
                     }
