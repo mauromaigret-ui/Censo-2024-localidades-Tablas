@@ -33,14 +33,14 @@ def report(req: ReportRequest) -> ReportResponse:
         available_fields = [
             name
             for name, dtype in cols
-            if str(dtype).lower().strip() in NUMERIC_TYPES
+            if str(name).startswith("n_") and str(dtype).lower().strip() in NUMERIC_TYPES
         ]
 
         if not VARIABLES_DICT_PATH.exists():
             raise HTTPException(status_code=400, detail="No se encontró data/diccionario_variables.csv")
 
         mapping_df = load_mapping_csv(str(VARIABLES_DICT_PATH))
-        group_specs, labels, details = build_group_specs(mapping_df, available_fields)
+        group_specs, labels = build_group_specs(mapping_df, available_fields)
 
         selected_groups = {g: group_specs[g] for g in req.groups if g in group_specs}
         if not selected_groups:
@@ -71,7 +71,6 @@ def report(req: ReportRequest) -> ReportResponse:
             var_sum,
             selected_groups,
             labels,
-            details,
             output_prefix="reporte_",
         )
 
