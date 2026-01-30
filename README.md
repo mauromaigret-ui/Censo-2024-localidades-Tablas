@@ -10,6 +10,15 @@ git fetch --tags
 git checkout word-report-ok
 ```
 
+## ✅ Hito segunda etapa (tablas + narrativa)
+Tag en GitHub: `segunda-etapa`  
+Incluye generación de tablas y descripción textual en Word.
+Para volver a este estado:
+```bash
+git fetch --tags
+git checkout segunda-etapa
+```
+
 ## Requisitos
 - Python 3.11+
 
