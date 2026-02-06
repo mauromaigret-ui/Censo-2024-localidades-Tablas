@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import random
 import re
+from datetime import datetime
 from typing import Dict, List
 
 import pandas as pd
 from docx import Document
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 
 from app.config import RESULTS_DIR
 
@@ -180,13 +184,75 @@ def _safe_filename(name: str) -> str:
     return name[:80] if name else "grupo"
 
 
+def _display_col(col: str) -> str:
+    return "Frecuencia" if col == "n" else col
+
+
+def _table_cols(df_rows: pd.DataFrame, category_col: str | None = None) -> tuple[list[str], list[str]]:
+    cols = [c for c in df_rows.columns if c not in {"is_total", "is_subtotal", "code"}]
+    if category_col and category_col in cols:
+        cols = [category_col] + [c for c in cols if c != category_col]
+    display_cols = [_display_col(c) for c in cols]
+    return cols, display_cols
+
+
+def _table_df(row_dicts: List[Dict[str, object]], category_col: str | None = None) -> tuple[pd.DataFrame, list[str], list[str], pd.DataFrame]:
+    df_rows = pd.DataFrame(row_dicts)
+    cols, display_cols = _table_cols(df_rows, category_col)
+    df_out = df_rows[cols].copy()
+    df_out.columns = display_cols
+    return df_rows, cols, display_cols, df_out
+
+
+def _add_seq_field(paragraph, label: str) -> None:
+    run = paragraph.add_run()
+    fld_begin = OxmlElement("w:fldChar")
+    fld_begin.set(qn("w:fldCharType"), "begin")
+    run._r.append(fld_begin)
+
+    instr = OxmlElement("w:instrText")
+    instr.set(qn("xml:space"), "preserve")
+    instr.text = f"SEQ {label} \\* ARABIC"
+    run._r.append(instr)
+
+    fld_sep = OxmlElement("w:fldChar")
+    fld_sep.set(qn("w:fldCharType"), "separate")
+    run._r.append(fld_sep)
+
+    run_result = paragraph.add_run("1")
+    fld_end = OxmlElement("w:fldChar")
+    fld_end.set(qn("w:fldCharType"), "end")
+    run_result._r.append(fld_end)
+
+
+def _add_table_caption(doc_ref: Document, title: str, localidad: str) -> None:
+    paragraph = doc_ref.add_paragraph()
+    try:
+        paragraph.style = "Caption"
+    except Exception:
+        pass
+    paragraph.add_run("Tabla ")
+    _add_seq_field(paragraph, "Tabla")
+    paragraph.add_run(f". {title} - {localidad}")
+
+
+def _add_source_line(doc_ref: Document) -> None:
+    paragraph = doc_ref.add_paragraph()
+    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = paragraph.add_run("Fuente: Censo, 2024.")
+    run.italic = True
+
+
 def build_reports(
     var_sum: Dict[str, float],
     group_specs: Dict[str, Dict],
     labels: Dict[str, str],
+    localidad: str,
     output_prefix: str,
 ) -> Dict[str, object]:
     reports = []
+    loc_slug = _safe_filename(localidad)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     for group_title, spec in group_specs.items():
         vars_list = spec["variables"]
@@ -267,29 +333,21 @@ def build_reports(
                     }
                 )
 
-        safe_name = _safe_filename(group_title)
-        csv_path = RESULTS_DIR / f"{output_prefix}{safe_name}.csv"
-        df_rows = pd.DataFrame(rows)
-        cols = [c for c in df_rows.columns if c not in {"is_total", "is_subtotal", "code"}]
-        if category_col:
-            cols = [category_col] + [c for c in cols if c != category_col]
-        df_rows[cols].to_csv(csv_path, index=False)
-
         reports.append(
             {
                 "title": group_title,
                 "rows": rows,
-                "csv_path": str(csv_path),
+                "csv_path": "",
                 "category_col": category_col,
                 "denominator": denominator if isinstance(denominator, str) else None,
             }
         )
 
     # consolidated outputs
-    combined_csv = RESULTS_DIR / f"{output_prefix}consolidado.csv"
-    combined_xlsx = RESULTS_DIR / f"{output_prefix}consolidado.xlsx"
-    combined_html = RESULTS_DIR / f"{output_prefix}consolidado.html"
-    combined_docx = RESULTS_DIR / f"{output_prefix}consolidado.docx"
+    combined_csv = RESULTS_DIR / f"{output_prefix}{loc_slug}_{timestamp}.csv"
+    combined_xlsx = RESULTS_DIR / f"{output_prefix}{loc_slug}_{timestamp}.xlsx"
+    combined_html = RESULTS_DIR / f"{output_prefix}{loc_slug}_{timestamp}.html"
+    combined_docx = RESULTS_DIR / f"{output_prefix}{loc_slug}_{timestamp}.docx"
 
     all_rows = []
     for rep in reports:
@@ -298,22 +356,71 @@ def build_reports(
             all_rows.append(out)
 
     combined_df = pd.DataFrame(all_rows)
-    combined_df.to_csv(combined_csv, index=False)
+    combined_df_out = combined_df.rename(columns={"n": "Frecuencia"})
+    combined_df_out.to_csv(combined_csv, index=False)
 
     with pd.ExcelWriter(combined_xlsx, engine="openpyxl") as writer:
-        combined_df.to_excel(writer, index=False, sheet_name="Consolidado")
+        combined_df_out.to_excel(writer, index=False, sheet_name="Consolidado")
+        used_sheet_names: set[str] = {"Consolidado"}
+
+        def unique_sheet_name(base: str) -> str:
+            name = _safe_filename(base)[:31] or "Tabla"
+            if name not in used_sheet_names:
+                used_sheet_names.add(name)
+                return name
+            counter = 2
+            while True:
+                suffix = f"_{counter}"
+                trimmed = name[: 31 - len(suffix)]
+                candidate = f"{trimmed}{suffix}"
+                if candidate not in used_sheet_names:
+                    used_sheet_names.add(candidate)
+                    return candidate
+                counter += 1
+
+        table_entries: List[Dict[str, object]] = []
         for rep in reports:
-            sheet_name = _safe_filename(rep["title"])[:31]
-            df_rows = pd.DataFrame(rep["rows"])
-            cols = [c for c in df_rows.columns if c not in {"is_total", "is_subtotal", "code"}]
-            df_rows[cols].to_excel(writer, index=False, sheet_name=sheet_name)
+            table_entries.append(
+                {
+                    "title": rep["title"],
+                    "rows": rep["rows"],
+                    "category_col": rep.get("category_col"),
+                }
+            )
+            category_col = rep.get("category_col")
+            if category_col:
+                categories = [
+                    cat
+                    for cat in sorted({r.get(category_col, "") for r in rep["rows"]})
+                    if cat
+                ]
+                for cat in categories:
+                    sub_rows = [
+                        r
+                        for r in rep["rows"]
+                        if r.get(category_col) == cat
+                        or (r.get("is_subtotal") and r.get(category_col) == cat)
+                    ]
+                    table_entries.append(
+                        {
+                            "title": f"{rep['title']} - {cat}",
+                            "rows": sub_rows,
+                            "category_col": rep.get("category_col"),
+                        }
+                    )
+
+        for idx, entry in enumerate(table_entries, start=1):
+            sheet_name = unique_sheet_name(str(entry["title"]))
+            _, _, _, df_out = _table_df(entry["rows"], entry.get("category_col"))
+            df_out.to_excel(writer, index=False, sheet_name=sheet_name, startrow=1)
+            ws = writer.sheets[sheet_name]
+            ws.cell(row=1, column=1, value=f"Tabla {idx}. {entry['title']} - {localidad}")
 
     html_parts = ["<h1>Reporte consolidado</h1>"]
     for rep in reports:
         html_parts.append(f"<h2>{rep['title']}</h2>")
-        df_rows = pd.DataFrame(rep["rows"])
-        cols = [c for c in df_rows.columns if c not in {"is_total", "is_subtotal", "code"}]
-        html_parts.append(df_rows[cols].to_html(index=False))
+        _, _, _, df_out = _table_df(rep["rows"], rep.get("category_col"))
+        html_parts.append(df_out.to_html(index=False))
     combined_html.write_text("\n".join(html_parts), encoding="utf-8")
 
     try:
@@ -325,14 +432,11 @@ def build_reports(
             row_dicts: List[Dict[str, object]],
             category_col: str | None = None,
         ) -> None:
-            df_rows = pd.DataFrame(row_dicts)
-            cols = [c for c in df_rows.columns if c not in {"is_total", "is_subtotal", "code"}]
-            if category_col and category_col in cols:
-                cols = [category_col] + [c for c in cols if c != category_col]
+            df_rows, cols, display_cols, _ = _table_df(row_dicts, category_col)
             table = doc_ref.add_table(rows=1, cols=len(cols))
             table.style = "Table Grid"
             hdr = table.rows[0].cells
-            for idx, col in enumerate(cols):
+            for idx, col in enumerate(display_cols):
                 run = hdr[idx].paragraphs[0].add_run(col)
                 run.bold = True
             for _, row in df_rows.iterrows():
@@ -346,13 +450,13 @@ def build_reports(
 
         # Seccion 1: solo tablas
         doc.add_heading("Sección 1: Tablas", level=1)
-        for idx, rep in enumerate(reports, start=1):
-            doc.add_heading(f"Tabla {idx}. {rep['title']}", level=2)
+        for rep in reports:
+            _add_table_caption(doc, rep["title"], localidad)
             add_table(doc, rep["rows"], rep.get("category_col"))
+            _add_source_line(doc)
 
         # Seccion 2: narrativa + tablas
         doc.add_heading("Sección 2: Tablas con narrativa", level=1)
-        table_counter = 1
         for rep in reports:
             category_col = rep.get("category_col")
             rows = rep["rows"]
@@ -369,24 +473,25 @@ def build_reports(
                         if r.get(category_col) == cat
                         or (r.get("is_subtotal") and r.get(category_col) == cat)
                     ]
-                    doc.add_heading(f"Tabla {table_counter}. {rep['title']} - {cat}", level=2)
+                    title = f"{rep['title']} - {cat}"
                     doc.add_paragraph(
                         _build_narrative(
                             sub_rows,
-                            f"{rep['title']} - {cat}",
+                            title,
                             rep.get("denominator"),
                         )
                     )
+                    _add_table_caption(doc, title, localidad)
                     add_table(doc, sub_rows, rep.get("category_col"))
-                    table_counter += 1
+                    _add_source_line(doc)
             else:
-                doc.add_heading(f"Tabla {table_counter}. {rep['title']}", level=2)
                 doc.add_paragraph(_build_narrative(rows, rep["title"], rep.get("denominator")))
+                _add_table_caption(doc, rep["title"], localidad)
                 add_table(doc, rows, rep.get("category_col"))
-                table_counter += 1
+                _add_source_line(doc)
         doc.save(combined_docx)
     except Exception:
-        combined_docx = RESULTS_DIR / f"{output_prefix}consolidado_docx_error.txt"
+        combined_docx = RESULTS_DIR / f"{output_prefix}{loc_slug}_{timestamp}_docx_error.txt"
         combined_docx.write_text("Error generando DOCX. Use el HTML o XLSX.")
 
     return {

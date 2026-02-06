@@ -40,6 +40,7 @@ class ReportRequest(BaseModel):
     layer: str
     filter_id: str
     groups: List[str]
+    localidad: str
 
 
 class ReportRow(BaseModel):

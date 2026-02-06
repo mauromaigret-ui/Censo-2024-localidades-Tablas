@@ -3,6 +3,7 @@ const layerSelect = document.getElementById("layerSelect");
 const loadVarsBtn = document.getElementById("loadVarsBtn");
 const filterInput = document.getElementById("filterInput");
 const filterMeta = document.getElementById("filterMeta");
+let localityInput = document.getElementById("localityInput");
 const groupsList = document.getElementById("groupsList");
 const searchBox = document.getElementById("searchBox");
 const selectAllBtn = document.getElementById("selectAllBtn");
@@ -15,22 +16,97 @@ const state = {
   groups: [],
 };
 
+if (!localityInput && filterMeta) {
+  const field = document.createElement("div");
+  field.className = "field";
+  field.innerHTML = `
+    <label for="localityInput">Localidad o sector (obligatorio)</label>
+    <input type="text" id="localityInput" placeholder="Ej: La Negra" />
+  `;
+  filterMeta.insertAdjacentElement("afterend", field);
+  localityInput = field.querySelector("#localityInput");
+}
+
 function setStatus(msg) {
   statusEl.textContent = msg;
 }
 
-async function loadLayers() {
-  setStatus("Cargando capas...");
-  const res = await fetch("/layers");
-  const data = await res.json();
+let layersRetry = 0;
+const MAX_LAYER_RETRY = 5;
+
+function applyLayersToSelect(layers) {
+  if (!Array.isArray(layers) || !layers.length) {
+    return false;
+  }
   layerSelect.innerHTML = "";
-  data.layers.forEach((l) => {
+  layers.forEach((l) => {
     const opt = document.createElement("option");
     opt.value = l.name;
     opt.textContent = l.name;
     layerSelect.appendChild(opt);
   });
-  setStatus("Capas listas");
+  return true;
+}
+
+async function loadLayers() {
+  try {
+    setStatus("Cargando capas...");
+    const res = await fetch("/layers");
+    if (!res.ok) {
+      throw new Error(await res.text());
+    }
+    const data = await res.json();
+    const layers = data.layers || [];
+    if (applyLayersToSelect(layers)) {
+      localStorage.setItem("layers_cache", JSON.stringify(layers));
+      setStatus("Capas listas");
+      layersRetry = 0;
+      return;
+    }
+    throw new Error("Sin capas disponibles");
+  } catch (error) {
+    console.error(error);
+    const cached = localStorage.getItem("layers_cache");
+    if (cached) {
+      try {
+        const cachedLayers = JSON.parse(cached);
+        if (applyLayersToSelect(cachedLayers)) {
+          setStatus("Capas cargadas desde caché");
+          return;
+        }
+      } catch (_) {
+        // ignore cache errors
+      }
+    }
+    if (layersRetry < MAX_LAYER_RETRY) {
+      layersRetry += 1;
+      setStatus(`Reintentando capas (${layersRetry}/${MAX_LAYER_RETRY})...`);
+      setTimeout(loadLayers, 1500 * layersRetry);
+      return;
+    }
+    if (!layerSelect.options.length) {
+      const defaults = [
+        "Entidades_CPV24",
+        "Aldeas_CPV24",
+        "Limite_Urbano_CPV24",
+      ];
+      defaults.forEach((name) => {
+        const opt = document.createElement("option");
+        opt.value = name;
+        opt.textContent = name;
+        layerSelect.appendChild(opt);
+      });
+      setStatus("Capas por defecto cargadas");
+      return;
+    }
+    if (!layerSelect.options.length) {
+      const opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = "Error al cargar capas";
+      layerSelect.appendChild(opt);
+    }
+    setStatus("Error al cargar capas");
+  }
 }
 
 async function loadVariables() {
@@ -127,6 +203,12 @@ runBtn.addEventListener("click", async () => {
     setStatus("Carga un filtro primero");
     return;
   }
+  const localidad = (localityInput.value || "").trim();
+  if (!localidad) {
+    setStatus("Ingresa la localidad o sector");
+    localityInput.focus();
+    return;
+  }
   const layer = layerSelect.value;
   const selected = Array.from(document.querySelectorAll(".group-check"))
     .filter((c) => c.checked)
@@ -144,6 +226,7 @@ runBtn.addEventListener("click", async () => {
       layer,
       filter_id: state.filterId,
       groups: selected,
+      localidad,
     }),
   });
 
@@ -168,21 +251,22 @@ function renderResults(data) {
   combined.className = "result-card";
   combined.innerHTML = `
     <div class="group-title">Salida consolidada</div>
-    <div class="group-meta">CSV: <code>${data.combined_csv}</code></div>
-    <div class="group-meta">HTML: <code>${data.combined_html}</code></div>
     <div class="group-meta">XLSX: <code>${data.combined_xlsx}</code></div>
     <div class="group-meta">DOCX: <code>${data.combined_docx}</code></div>
-    <div class="group-meta">Sugerencia: abrir el DOCX o HTML y copiar a Word.</div>
+    <div class="group-meta">Sugerencia: abrir el DOCX y copiar a Word.</div>
   `;
   wrapper.appendChild(combined);
 
   data.reports.forEach((report) => {
     const card = document.createElement("div");
     card.className = "result-card";
+    const csvLine = report.csv_path
+      ? `<div class="group-meta">CSV: <code>${report.csv_path}</code></div>`
+      : "";
     card.innerHTML = `
       <div class="group-title">${report.group_label || report.group}</div>
       <div class="group-meta">Filas: ${report.rows_count}</div>
-      <div class="group-meta">CSV: <code>${report.csv_path}</code></div>
+      ${csvLine}
     `;
     wrapper.appendChild(card);
   });

@@ -26,6 +26,10 @@ NUMERIC_TYPES = {
 @router.post("/report", response_model=ReportResponse)
 def report(req: ReportRequest) -> ReportResponse:
     try:
+        localidad = (req.localidad or "").strip()
+        if not localidad:
+            raise HTTPException(status_code=400, detail="Debe indicar la localidad/sector")
+
         stored = store.get(req.filter_id)
         filter_info = read_filter_excel(str(stored.path))
 
@@ -71,6 +75,7 @@ def report(req: ReportRequest) -> ReportResponse:
             var_sum,
             selected_groups,
             labels,
+            localidad=localidad,
             output_prefix="reporte_",
         )
 

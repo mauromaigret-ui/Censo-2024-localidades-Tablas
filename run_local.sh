@@ -18,4 +18,12 @@ source "$BACKEND_DIR/.venv/bin/activate"
 
 pip install -r "$BACKEND_DIR/requirements.txt"
 
-uvicorn --app-dir "$BACKEND_DIR" app.main:app --reload --port 8000
+PORT="8012"
+URL="http://127.0.0.1:${PORT}"
+if command -v open >/dev/null 2>&1; then
+  (sleep 2 && open "$URL") &
+elif command -v xdg-open >/dev/null 2>&1; then
+  (sleep 2 && xdg-open "$URL") &
+fi
+
+uvicorn --app-dir "$BACKEND_DIR" app.main:app --reload --port "$PORT"

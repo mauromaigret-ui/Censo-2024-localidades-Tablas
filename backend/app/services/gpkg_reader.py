@@ -61,35 +61,49 @@ def load_layer_by_names(
     names: List[Tuple[str, str, str]],
     gpkg_path: Path = GPKG_PATH,
 ) -> pd.DataFrame:
-    # names: list of (ENTIDAD, LOCALIDAD, COMUNA)
+    if not names:
+        return pd.DataFrame(columns=list(dict.fromkeys(columns)))
+
+    select_cols = list(dict.fromkeys(columns))
+    cols_sql = ", ".join([f'"{c}"' for c in select_cols])
+
+    has_localidad = "LOCALIDAD" in select_cols
+    has_comuna = "COMUNA" in select_cols
+
+    def build_where(ent: str, loc: str, com: str) -> Tuple[str, List[str]]:
+        conditions = ['UPPER(TRIM(ENTIDAD)) = ?']
+        params = [ent]
+        if has_localidad:
+            conditions.append('UPPER(TRIM(LOCALIDAD)) = ?')
+            params.append(loc)
+        if has_comuna:
+            conditions.append('UPPER(TRIM(COMUNA)) = ?')
+            params.append(com)
+        return f"({' AND '.join(conditions)})", params
+
     con = sqlite3.connect(gpkg_path)
     try:
-        df = pd.read_sql_query(
-            f"SELECT {', '.join([f'\"{c}\"' for c in columns])} FROM {layer}",
-            con,
-        )
+        chunks = []
+        chunk_size = 250
+        for i in range(0, len(names), chunk_size):
+            where_parts = []
+            params: List[str] = []
+            for ent, loc, com in names[i : i + chunk_size]:
+                ent_norm = str(ent).strip().upper()
+                if not ent_norm:
+                    continue
+                loc_norm = str(loc or "").strip().upper()
+                com_norm = str(com or "").strip().upper()
+                clause, clause_params = build_where(ent_norm, loc_norm, com_norm)
+                where_parts.append(clause)
+                params.extend(clause_params)
+            if not where_parts:
+                continue
+            sql = f"SELECT {cols_sql} FROM {layer} WHERE " + " OR ".join(where_parts)
+            chunks.append(pd.read_sql_query(sql, con, params=params))
+
+        if not chunks:
+            return pd.DataFrame(columns=select_cols)
+        return pd.concat(chunks, ignore_index=True)
     finally:
         con.close()
-
-    if not names:
-        return df.iloc[0:0]
-
-    df["ENTIDAD"] = df["ENTIDAD"].astype(str).str.upper().str.strip()
-    if "LOCALIDAD" in df.columns:
-        df["LOCALIDAD"] = df["LOCALIDAD"].astype(str).str.upper().str.strip()
-    if "COMUNA" in df.columns:
-        df["COMUNA"] = df["COMUNA"].astype(str).str.upper().str.strip()
-
-    names_df = pd.DataFrame(names, columns=["ENTIDAD", "LOCALIDAD", "COMUNA"])
-    names_df["ENTIDAD"] = names_df["ENTIDAD"].astype(str).str.upper().str.strip()
-    names_df["LOCALIDAD"] = names_df["LOCALIDAD"].astype(str).str.upper().str.strip()
-    names_df["COMUNA"] = names_df["COMUNA"].astype(str).str.upper().str.strip()
-
-    join_cols = ["ENTIDAD"]
-    if "LOCALIDAD" in df.columns:
-        join_cols.append("LOCALIDAD")
-    if "COMUNA" in df.columns:
-        join_cols.append("COMUNA")
-
-    merged = df.merge(names_df[join_cols].drop_duplicates(), on=join_cols, how="inner")
-    return merged

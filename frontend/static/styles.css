@@ -160,10 +160,23 @@ body {
 }
 
 #layerSelect,
-#searchBox {
+#searchBox,
+#localityInput {
   padding: 8px 10px;
   border-radius: 10px;
   border: 1px solid var(--border);
+}
+
+.field {
+  margin-top: 14px;
+  display: grid;
+  gap: 6px;
+  max-width: 360px;
+}
+
+.field label {
+  font-size: 0.9rem;
+  color: var(--muted);
 }
 
 .file-meta {

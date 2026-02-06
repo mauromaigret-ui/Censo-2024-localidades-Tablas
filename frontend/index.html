@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Censo 2024 · Localidades Tablas</title>
-    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260206" />
   </head>
   <body>
     <div class="app">
@@ -40,7 +40,12 @@
             <h2>1) Selecciona capa cartográfica</h2>
           </div>
           <div class="panel-body">
-            <select id="layerSelect"></select>
+            <select id="layerSelect">
+              <option value="">Seleccione una capa</option>
+              <option value="Entidades_CPV24">Entidades_CPV24</option>
+              <option value="Aldeas_CPV24">Aldeas_CPV24</option>
+              <option value="Limite_Urbano_CPV24">Limite_Urbano_CPV24</option>
+            </select>
             <button class="btn" id="loadVarsBtn">Cargar variables</button>
           </div>
         </section>
@@ -52,6 +57,10 @@
           <div class="panel-body">
             <input type="file" id="filterInput" accept=".xlsx" />
             <div class="file-meta" id="filterMeta">Sin filtro cargado.</div>
+            <div class="field">
+              <label for="localityInput">Localidad o sector (obligatorio)</label>
+              <input type="text" id="localityInput" placeholder="Ej: La Negra" />
+            </div>
           </div>
         </section>
 
@@ -81,6 +90,6 @@
       </main>
     </div>
 
-    <script src="/static/app.js" defer></script>
+    <script src="/static/app.js?v=20260206" defer></script>
   </body>
 </html>
