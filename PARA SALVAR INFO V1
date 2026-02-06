@@ -1,0 +1,10 @@
+Cómo volver a la versión estable V1 (pasos explícitos)
+
+Asegura el tag local: git fetch --tags
+Opción A (ver exactamente V1, sin crear rama): git checkout V1
+Para volver a la rama principal: git switch main
+Opción B (crear una rama estable desde V1): git switch -c v1-estable V1
+Cómo pedírmelo en el futuro (texto exacto)
+
+“Quiero volver a la versión V1 (tag V1). Crea una rama v1-estable desde ese tag.”
+O bien: “Quiero ver el estado exacto de V1 sin crear rama, luego volver a main.”
