@@ -29,6 +29,15 @@ def report(req: ReportRequest) -> ReportResponse:
         localidad = (req.localidad or "").strip()
         if not localidad:
             raise HTTPException(status_code=400, detail="Debe indicar la localidad/sector")
+        filter_type = (req.filter_type or "rural").strip().lower()
+        if filter_type not in {"rural", "urbano"}:
+            raise HTTPException(status_code=400, detail="Tipo de filtro inválido")
+        required_layer = "Manzanas_CPV24" if filter_type == "urbano" else "Entidades_CPV24"
+        if req.layer != required_layer:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Para filtro {filter_type}, debe usar la capa {required_layer}",
+            )
 
         stored = store.get(req.filter_id)
         filter_info = read_filter_excel(str(stored.path))
@@ -58,12 +67,23 @@ def report(req: ReportRequest) -> ReportResponse:
                 needed_columns.add(denom)
 
         needed_columns.update(["ID_ENTIDAD", "ENTIDAD", "LOCALIDAD", "COMUNA"])
+        if filter_type == "urbano":
+            needed_columns.add("MANZENT")
 
         ids = filter_info["ids"]
-        if ids:
-            df = load_layer(req.layer, list(needed_columns), filter_ids=ids)
+        if filter_type == "urbano":
+            cols_upper = {name.upper() for name, _ in cols}
+            if "MANZENT" not in cols_upper:
+                raise HTTPException(status_code=400, detail="La capa seleccionada no tiene columna MANZENT")
+            manzent = filter_info.get("manzent", [])
+            if not manzent:
+                raise HTTPException(status_code=400, detail="El filtro no contiene la columna MANZENT")
+            df = load_layer(req.layer, list(needed_columns), filter_manzent=manzent)
         else:
-            df = load_layer_by_names(req.layer, list(needed_columns), filter_info["names"])
+            if ids:
+                df = load_layer(req.layer, list(needed_columns), filter_ids=ids)
+            else:
+                df = load_layer_by_names(req.layer, list(needed_columns), filter_info["names"])
 
         var_sum = {}
         for col in needed_columns:

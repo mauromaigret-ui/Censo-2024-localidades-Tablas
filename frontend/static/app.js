@@ -3,6 +3,9 @@ const layerSelect = document.getElementById("layerSelect");
 const loadVarsBtn = document.getElementById("loadVarsBtn");
 const filterInput = document.getElementById("filterInput");
 const filterMeta = document.getElementById("filterMeta");
+const filterTypeSelect = document.getElementById("filterType");
+const filterHint = document.getElementById("filterHint");
+const filterWarning = document.getElementById("filterWarning");
 let localityInput = document.getElementById("localityInput");
 const groupsList = document.getElementById("groupsList");
 const searchBox = document.getElementById("searchBox");
@@ -27,6 +30,47 @@ if (!localityInput && filterMeta) {
   localityInput = field.querySelector("#localityInput");
 }
 
+function updateFilterHint() {
+  if (!filterHint || !filterTypeSelect) return;
+  if (filterTypeSelect.value === "urbano") {
+    filterHint.innerHTML = "Usa columna <code>MANZENT</code> (1 valor por fila).";
+  } else {
+    filterHint.innerHTML =
+      "Usa columna <code>ID_ENTIDAD</code> o <code>ENTIDAD</code> (opcional <code>LOCALIDAD</code>, <code>COMUNA</code>).";
+  }
+}
+
+function guessFilterType(layerName) {
+  if (!layerName) return null;
+  const name = layerName.toUpperCase();
+  if (name.includes("MANZ")) return "urbano";
+  if (name.includes("ENTIDAD")) return "rural";
+  return null;
+}
+
+function validateLayerForFilter(showStatus = false) {
+  const layer = layerSelect.value;
+  const filterType = filterTypeSelect ? filterTypeSelect.value : "rural";
+  const requiredLayer = filterType === "urbano" ? "Manzanas_CPV24" : "Entidades_CPV24";
+  const ok = !layer || layer === requiredLayer;
+  if (filterWarning) {
+    if (ok) {
+      filterWarning.textContent = "";
+      filterWarning.hidden = true;
+    } else {
+      filterWarning.textContent = `Para filtro ${filterType}, debes usar la capa ${requiredLayer}.`;
+      filterWarning.hidden = false;
+    }
+  }
+  if (!ok && showStatus) {
+    setStatus(`Selecciona la capa ${requiredLayer} para filtro ${filterType}`);
+  }
+  if (runBtn) {
+    runBtn.disabled = !ok;
+  }
+  return ok;
+}
+
 function setStatus(msg) {
   statusEl.textContent = msg;
 }
@@ -45,6 +89,11 @@ function applyLayersToSelect(layers) {
     opt.textContent = l.name;
     layerSelect.appendChild(opt);
   });
+  const guessed = guessFilterType(layerSelect.value);
+  if (guessed && filterTypeSelect) {
+    filterTypeSelect.value = guessed;
+    updateFilterHint();
+  }
   return true;
 }
 
@@ -57,12 +106,13 @@ async function loadLayers() {
     }
     const data = await res.json();
     const layers = data.layers || [];
-    if (applyLayersToSelect(layers)) {
-      localStorage.setItem("layers_cache", JSON.stringify(layers));
-      setStatus("Capas listas");
-      layersRetry = 0;
-      return;
-    }
+  if (applyLayersToSelect(layers)) {
+    localStorage.setItem("layers_cache", JSON.stringify(layers));
+    setStatus("Capas listas");
+    layersRetry = 0;
+    validateLayerForFilter(false);
+    return;
+  }
     throw new Error("Sin capas disponibles");
   } catch (error) {
     console.error(error);
@@ -112,6 +162,14 @@ async function loadLayers() {
 async function loadVariables() {
   const layer = layerSelect.value;
   if (!layer) return;
+  const guessed = guessFilterType(layer);
+  if (guessed && filterTypeSelect) {
+    filterTypeSelect.value = guessed;
+    updateFilterHint();
+  }
+  if (!validateLayerForFilter(true)) {
+    return;
+  }
   setStatus("Cargando variables...");
   const res = await fetch(`/variables?layer=${encodeURIComponent(layer)}`);
   if (!res.ok) {
@@ -189,6 +247,20 @@ filterInput.addEventListener("change", async (event) => {
 
 loadVarsBtn.addEventListener("click", loadVariables);
 searchBox.addEventListener("input", renderGroups);
+if (filterTypeSelect) {
+  filterTypeSelect.addEventListener("change", () => {
+    updateFilterHint();
+    validateLayerForFilter(true);
+  });
+}
+layerSelect.addEventListener("change", () => {
+  const guessed = guessFilterType(layerSelect.value);
+  if (guessed && filterTypeSelect) {
+    filterTypeSelect.value = guessed;
+    updateFilterHint();
+  }
+  validateLayerForFilter(false);
+});
 
 selectAllBtn.addEventListener("click", () => {
   document.querySelectorAll(".group-check").forEach((c) => (c.checked = true));
@@ -203,6 +275,10 @@ runBtn.addEventListener("click", async () => {
     setStatus("Carga un filtro primero");
     return;
   }
+  if (!validateLayerForFilter(true)) {
+    return;
+  }
+  const filter_type = filterTypeSelect ? filterTypeSelect.value : "rural";
   const localidad = (localityInput.value || "").trim();
   if (!localidad) {
     setStatus("Ingresa la localidad o sector");
@@ -227,6 +303,7 @@ runBtn.addEventListener("click", async () => {
       filter_id: state.filterId,
       groups: selected,
       localidad,
+      filter_type,
     }),
   });
 
@@ -275,3 +352,5 @@ function renderResults(data) {
 }
 
 loadLayers();
+updateFilterHint();
+validateLayerForFilter(false);

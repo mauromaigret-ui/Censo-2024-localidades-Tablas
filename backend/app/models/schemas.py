@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pydantic import BaseModel
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Literal
 
 
 class LayerInfo(BaseModel):
@@ -41,6 +41,7 @@ class ReportRequest(BaseModel):
     filter_id: str
     groups: List[str]
     localidad: str
+    filter_type: Literal["rural", "urbano"] = "rural"
 
 
 class ReportRow(BaseModel):

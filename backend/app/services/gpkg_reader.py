@@ -33,18 +33,26 @@ def load_layer(
     layer: str,
     columns: List[str],
     filter_ids: List[int] | None = None,
+    filter_manzent: List[int] | List[str] | None = None,
     gpkg_path: Path = GPKG_PATH,
 ) -> pd.DataFrame:
     select_cols = list(dict.fromkeys(columns))
     cols_sql = ", ".join([f'"{c}"' for c in select_cols])
     sql = f"SELECT {cols_sql} FROM {layer}"
+    params = None
 
     if filter_ids:
         placeholders = ",".join(["?"] * len(filter_ids))
         sql += f" WHERE CAST(ID_ENTIDAD AS INTEGER) IN ({placeholders})"
         params = filter_ids
-    else:
-        params = None
+    elif filter_manzent:
+        placeholders = ",".join(["?"] * len(filter_manzent))
+        if all(isinstance(v, int) for v in filter_manzent):
+            sql += f" WHERE CAST(MANZENT AS INTEGER) IN ({placeholders})"
+            params = filter_manzent
+        else:
+            sql += f" WHERE TRIM(CAST(MANZENT AS TEXT)) IN ({placeholders})"
+            params = filter_manzent
 
     con = sqlite3.connect(gpkg_path)
     try:

@@ -45,8 +45,10 @@
               <option value="Entidades_CPV24">Entidades_CPV24</option>
               <option value="Aldeas_CPV24">Aldeas_CPV24</option>
               <option value="Limite_Urbano_CPV24">Limite_Urbano_CPV24</option>
+              <option value="Manzanas_CPV24">Manzanas_CPV24</option>
             </select>
             <button class="btn" id="loadVarsBtn">Cargar variables</button>
+            <div class="warning" id="filterWarning" hidden></div>
           </div>
         </section>
 
@@ -55,6 +57,16 @@
             <h2>2) Cargar filtro de entidades</h2>
           </div>
           <div class="panel-body">
+            <div class="field">
+              <label for="filterType">Tipo de filtro</label>
+              <select id="filterType">
+                <option value="rural">Rural (Entidades censales)</option>
+                <option value="urbano">Urbano (Manzanas - MANZENT)</option>
+              </select>
+              <div class="field-hint" id="filterHint">
+                Usa columna <code>ID_ENTIDAD</code> o <code>ENTIDAD</code> (opcional <code>LOCALIDAD</code>, <code>COMUNA</code>).
+              </div>
+            </div>
             <input type="file" id="filterInput" accept=".xlsx" />
             <div class="file-meta" id="filterMeta">Sin filtro cargado.</div>
             <div class="field">
